@@ -111,22 +111,192 @@ No open questions remain.
 ---
 
 # 2. Design
-_Placeholder. Starting point: reuse the spike's flow (Zalo Adapter → Agent Client → Publisher). Likely little or no new work._
 
-# 3. Future / Out of Scope
-_Placeholder: ship/pickup field, kitchen announcements, totals, menu of the day._
+## 2.1 Approach
+Mediator pattern. One **Coordinator** (the mediator) knows every component. The three components (colleagues) know only the Coordinator: they report what happened as **events**, and they do what the Coordinator tells them as **commands**. No component calls another one directly, so each can be replaced or tested alone (for example, a fake Reader that replays messages, or a different LLM).
 
-# 4. Scenarios
-_Placeholder._
+This replaces the spike's pull loop (the Orchestrator polling the adapter) with an event-driven flow: the Reader pushes a new message, and the Coordinator drives the rest. The spike's code is reused inside the colleagues (see §2.9).
 
-# 5. Test Plan
-_Placeholder: map AC-1 to AC-7 to agent, adapter and Supabase tests._
+```mermaid
+classDiagram
+    class Coordinator {
+        <<Mediator>>
+        +notify(sender, event)
+        -queue
+    }
+    class ZaloReader {
+        <<Colleague>>
+        +start()
+        +stop()
+        +ack(key)
+    }
+    class OrderExtractor {
+        <<Colleague>>
+        +extract(message)
+    }
+    class OrderPublisher {
+        <<Colleague>>
+        +publish(order)
+    }
+    ZaloReader --> Coordinator : MessageReceived / ReaderState
+    OrderExtractor --> Coordinator : OrderExtracted / NotAnOrder / ExtractFailed
+    OrderPublisher --> Coordinator : OrderPublished / PublishFailed
+    Coordinator ..> ZaloReader : ack
+    Coordinator ..> OrderExtractor : extract
+    Coordinator ..> OrderPublisher : publish
+```
 
-# 6. Implementation Tasks
-_Placeholder._
+## 2.2 Modularity
 
-# 7. Rollout and Operations
-_Placeholder._
+Each colleague is a **separate module** with a narrow public interface, so it can be built, tested and replaced on its own.
 
-# 8. Risks
-_Placeholder._
+- Each lives in its own package with its own tests, and exposes one `Protocol` (interface) plus a factory. The Coordinator imports only the three Protocols and the shared `events` module, never a concrete class.
+- A colleague imports nothing from another colleague. They share only `events.py` (plain data types).
+- Each owns its dependencies and config: only the Reader knows about the browser and Zalo selectors, only the Extractor about Ollama and the prompt, and only the Publisher about Supabase.
+- `main.py` is the only place that picks the concrete implementations and wires them to the Coordinator.
+- Because of this, the Extractor can later move behind HTTP, or the Reader be swapped for a fake that replays messages, with no change to the Coordinator or the other colleagues.
+
+```python
+class MessageSource(Protocol):       # ZaloReader
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def ack(self, key: str) -> None: ...
+
+class Extractor(Protocol):           # OrderExtractor
+    def extract(self, message: Message) -> None: ...   # result arrives as an event
+
+class Publisher(Protocol):           # OrderPublisher
+    def publish(self, order: Order) -> None: ...        # result arrives as an event
+```
+
+Each colleague is built with the Coordinator (`ZaloReader(mediator, config)`), and reports through `mediator.notify(...)`.
+
+## 2.3 Components (colleagues)
+
+### ZaloReader
+Opens Zalo Web (headed browser, persistent profile, so the QR login is needed once), attaches to the configured chat, and notifies the Coordinator of each new text message.
+
+- **Chat target (config `ZALO_CHAT`)**: the title of the **group chat** to read (v1 reads groups only). The Reader **searches for the title in Zalo Web's search box and opens the matching chat itself**, so the operator does not open it by hand. A private chat with the same title is never opened.
+  - Opens the chat after login, and again if the user navigates elsewhere or the page reloads.
+  - Matches the title exactly (after trimming spaces, ignoring case and diacritics). With several matches it picks the exact one; with none, or with only partial matches, it emits `ChatNotFound` and keeps retrying, and it never opens a different chat.
+  - If `ZALO_CHAT` is empty, it reads the chat that is already open, and it requires that chat to be a group.
+- **Reads**: new text messages, oldest first. On start, or when the chat changes, it also reads the last `BACKFILL_DAYS` days of history. Images, stickers and files are skipped.
+- **De-duplicates** by message key in a local store, so a restart never re-emits a handled message. A key is stored only after `ack(key)`.
+- **Emits** `MessageReceived(message)` and `ReaderState(state)`, where state is `READY`, `LOGIN_REQUIRED`, `CHAT_NOT_FOUND`, `NO_CHAT_OPEN`, `SELECTOR_DRIFT`, `BROWSER_FAILED`.
+- **Takes** `ack(key)` (mark the message done) and `start()` / `stop()`.
+
+### OrderExtractor
+Runs **in-process** inside the same Python process as the Coordinator, with no HTTP service, no token and no separate deployment. It calls the local Qwen model (Ollama) to decide if a message is a pre-order and extract `who`, `qty`, `date`. Applies the day-word rules (§1.4) against the message created date, and validates the model output before returning it.
+
+- **Takes** `extract(message)`.
+- **Emits** one of `OrderExtracted(order)`, `NotAnOrder(key, reason)` (chat, past day, several orders, bad quantity), or `ExtractFailed(key, retryable)` (Ollama down or timeout is retryable; invalid output is not).
+- Stateless. The message key is passed through so an event always names its message.
+
+### OrderPublisher
+Creates or updates the order through the Supabase `orders` Edge Function (`source=zalo`, `external_id` = message key). The upsert makes retries safe.
+
+- **Takes** `publish(order)`.
+- **Emits** `OrderPublished(key)` (201 or 200) or `PublishFailed(key, retryable)` (network, 408, 429, 5xx and 401 are retryable; 400, 405, 422 are not).
+
+## 2.4 Messages and events
+
+```text
+Message        key, chat, sender, text, sent_at (tz-aware, Asia/Ho_Chi_Minh)
+Order          key, who, qty, date (YYYY-MM-DD), message
+
+Reader   → Coordinator   MessageReceived(Message) · ReaderState(state)
+Extractor→ Coordinator   OrderExtracted(Order) · NotAnOrder(key, reason) · ExtractFailed(key, retryable)
+Publisher→ Coordinator   OrderPublished(key) · PublishFailed(key, retryable)
+Coordinator → Reader     ack(key)
+Coordinator → Extractor  extract(Message)
+Coordinator → Publisher  publish(Order)
+```
+
+## 2.5 Coordinator rules (the mediation logic)
+
+All cross-component logic lives only here.
+
+| When the Coordinator receives | It does |
+|---|---|
+| `MessageReceived` | Adds the message to the queue, if its key is not already queued or in flight. |
+| (worker takes the next message) | Sends `extract(message)`. |
+| `OrderExtracted` | Sends `publish(order)`. |
+| `NotAnOrder` | Sends `ack(key)`. The message is done, with nothing saved. |
+| `OrderPublished` | Sends `ack(key)`. The message is done. |
+| `ExtractFailed` / `PublishFailed`, retryable | Keeps the message at the head of the queue and retries it after a backoff (2 s, doubling, up to 60 s). |
+| `ExtractFailed` / `PublishFailed`, not retryable | Logs the status and key, never the text, then sends `ack(key)` so one bad message cannot block the queue. |
+| `ReaderState` other than `READY` | Logs it, shows it to the operator, and keeps waiting. It never exits. `BROWSER_FAILED` after repeated restarts stops the Coordinator. |
+
+Guarantees:
+- **Order**: one worker handles one message at a time, oldest first, so a retry holds back newer messages and the order is kept.
+- **At-least-once, no duplicates**: a message is acked only after its order is stored, or after it is known to produce none. A re-sent message upserts the same Supabase row through `external_id`.
+- **Restart**: the Reader's store holds only acked keys, so un-acked messages are re-emitted and re-processed safely.
+
+## 2.6 Flow
+
+```mermaid
+sequenceDiagram
+    participant R as ZaloReader
+    participant C as Coordinator
+    participant E as OrderExtractor
+    participant P as OrderPublisher
+
+    R->>C: MessageReceived(msg)
+    C->>E: extract(msg)
+    alt pre-order
+        E->>C: OrderExtracted(order)
+        C->>P: publish(order)
+        P->>C: OrderPublished(key)
+        C->>R: ack(key)
+    else not an order
+        E->>C: NotAnOrder(key)
+        C->>R: ack(key)
+    else Ollama down
+        E->>C: ExtractFailed(key, retryable)
+        Note over C: back off, retry the same message
+    end
+```
+
+## 2.7 Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ZALO_CHAT` | empty | Title of the group chat to search for and open (groups only). Empty = the chat currently open. |
+| `BACKFILL_DAYS` | `3` | History read when a chat is opened. |
+| `POLL_INTERVAL_SECONDS` | `2` | Reader polling interval. |
+| `OLLAMA_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen2.5:7b-instruct` | Local LLM. |
+| `LLM_TIMEOUT_SECONDS` | `20` | Per extraction call. |
+| `SUPABASE_URL`, `SUPABASE_API_KEY` | required | Orders API. The key is never logged. |
+| `RETRY_MAX_BACKOFF_SECONDS` | `60` | Retry ceiling. |
+
+## 2.8 Project structure
+
+```text
+zalo-order-assistant/
+├── pyproject.toml
+├── src/zalo_order_assistant/
+│   ├── events.py             # Message, Order, all event types (shared, data only)
+│   ├── coordinator.py        # mediator: queue, rules in §2.5; imports only the Protocols
+│   ├── ports.py              # MessageSource, Extractor, Publisher Protocols
+│   ├── main.py               # the only place that wires concrete colleagues
+│   ├── zalo_reader/          # browser, selectors, chat search/open, de-dup store
+│   ├── order_extractor/      # Qwen prompt, day words, validation (in-process)
+│   └── order_publisher/      # Supabase client
+└── tests/                    # one folder per module, plus coordinator tests with fakes
+```
+
+Each colleague receives the Coordinator through its constructor and has no import of another colleague.
+
+## 2.9 Reuse from the spikes
+
+| New | Reuses |
+|---|---|
+| ZaloReader | zalo-adater: `browser.py`, `reader.js`, `zalo_web.py`, `messages_repo.py`. The poll loop becomes a push. **New work:** search for the chat title and open it. |
+| OrderExtractor | extract-order-agent: `llm.py`, `validate.py`, copied into the module and run in-process (no HTTP call, no token). Needs the changes noted in §1.8. The agent's SQLite per-day numbering is not used, because Supabase already stores the orders. |
+| OrderPublisher | zalo-adater: the Supabase publisher. |
+| Coordinator | zalo-adater: the Orchestrator's queue, retry and ack rules, now driven by events. |
+
+## 2.10 Open design questions
+1. ~~Extractor deployment~~: resolved. In-process, as its own module.
+2. ~~Selecting the chat~~: resolved. The Reader searches by title and opens the chat. This is **new work**: the spike never searched, so the search box selectors and the exact-match rule must be verified against the live Zalo Web (it may also drift when Zalo changes its page).
+3. ~~Same title for a group and a person~~: resolved. v1 reads group chats only, so only a group result is accepted.
