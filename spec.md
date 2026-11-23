@@ -300,3 +300,64 @@ Each colleague receives the Coordinator through its constructor and has no impor
 1. ~~Extractor deployment~~: resolved. In-process, as its own module.
 2. ~~Selecting the chat~~: resolved. The Reader searches by title and opens the chat. This is **new work**: the spike never searched, so the search box selectors and the exact-match rule must be verified against the live Zalo Web (it may also drift when Zalo changes its page).
 3. ~~Same title for a group and a person~~: resolved. v1 reads group chats only, so only a group result is accepted.
+
+---
+
+# 3. Implementation Tasks
+
+Build order is test-first and bottom-up: shared types and interfaces, then the Coordinator against fakes (a working skeleton), then each colleague on its own, then wiring. After T2 the three colleague tracks (T3, T4, T5) are independent and can run in parallel.
+
+Size: S = under half a day, M = about a day, L = several days.
+
+## 3.1 Task list
+
+| # | Task | Covers | Depends | Size | Done when |
+|---|---|---|---|---|---|
+| T0 | **Scaffold.** `pyproject.toml` (uv, Python 3.12), package layout from §2.8, ruff and pytest, `.env.example`, `.gitignore` (`.env`, `data/`). | NFR-3 | none | S | `uv sync` and `uv run pytest` run on an empty suite. |
+| T1 | **Events and ports.** `events.py` (`Message`, `Order`, all events in §2.4) and `ports.py` (`MessageSource`, `Extractor`, `Publisher`). Data only, no logic. | FR-3, FR-7 | T0 | S | Types import cleanly. `mypy` or `pyright` passes. |
+| T2 | **Coordinator with fakes.** Queue, single worker, rules in §2.5, backoff 2 s to 60 s, ack rules, de-dup of queued keys, `ReaderState` handling. Tests use fake colleagues. | FR-7, FR-10, NFR-2; AC-4, AC-6, AC-7 | T1 | M | Tests pass for: order, not-an-order, retryable then success, non-retryable acked, newer messages held behind a retry, duplicate key queued once, shutdown. |
+| T3 | **OrderPublisher.** Supabase client for `POST /functions/v1/orders` (`source=zalo`, `external_id`=key, field mapping from FR-9). Map 201/200 to `OrderPublished`, 408/429/5xx/401/network to retryable, 400/405/422 to not retryable. 2000-char `message` cut. | FR-9; AC-7 | T1 | S | Contract tests against a mock HTTP server for every status in §2.3. One manual call against the real Supabase creates a row visible in the live web app, and a second call updates it without resetting `delivered`. |
+| T4 | **OrderExtractor.** Copy `llm.py`/`validate.py` from the agent. Change to: take `sent_at` as the reference day (not the system date); day-word table of §1.4 in the prompt; no day word defaults to the created date; past-day words, several orders and bad quantity return `NotAnOrder`; Ollama down or timeout is retryable, invalid output is not. | FR-2 to FR-6b, NFR-4; AC-1 to AC-3, AC-5, AC-8 to AC-15 | T1 | L | Unit tests for date resolution (pure function, no LLM) cover every row of the §1.4 table and AC-8 to AC-15. A fixture set of 40+ real Vietnamese messages is run against local Qwen, and the result is recorded as an accuracy report. Pass mark is set after the first run (see risk R2). |
+| T4a | **Date resolver as code (sub-task of T4).** Compute the day-word to date table in Python and put it in the prompt, then re-check the model's `date` against the same function after extraction. | FR-6a; AC-8 to AC-15 | T4 | S | A model answer that disagrees with the resolver is corrected or rejected, with a unit test for each case. |
+| T5a | **ZaloReader: port the spike.** Move `browser.py`, `reader.js`, `reader.py`, `zalo_web.py`, `messages_repo.py` and `selectors.json` into `zalo_reader/`. Replace the pull loop with `MessageReceived` pushes. Expose `ack(key)` and emit `ReaderState`. | FR-1, FR-7; NFR-2 | T1 | M | The spike's existing tests pass in the new module. A restart does not re-emit acked messages. |
+| T5b | **ZaloReader: search and open a group chat by title.** Use the search box, exact match (trimmed, ignoring case and diacritics), accept only a group result, never open a private chat or a partial match. Emit `CHAT_NOT_FOUND`. Re-open the chat after a reload or a navigation away. | FR-1 | T5a | L | Verified on live Zalo Web: the configured group opens from a cold start, a same-titled private chat is ignored, and a wrong title gives `CHAT_NOT_FOUND`. Selectors recorded in `selectors.json`. (This is the biggest unknown, see R1.) |
+| T5c | **ZaloReader: message created date.** Return `sent_at` as an exact, tz-aware time for every message, including old messages loaded by backfill (needs the date separators). | FR-6a; AC-15 | T5a | M | Messages across a midnight boundary and a 3-day backfill have the right dates, checked by a recorded fixture. |
+| T6 | **Wire it up.** `main.py` builds the config (§2.7), creates the colleagues, hands them to the Coordinator, handles Ctrl+C. Redact secrets and message text in logs. | §2.7 config, NFR-3 | T2, T3, T4, T5b | S | `uv run zalo-order-assistant` starts, logs state changes, and stops cleanly. |
+| T7 | **End-to-end test.** Replayed Zalo fixture, real Qwen, real Supabase test project. Assert one order per order message and none for chat. Restart mid-run and repeat the same messages, then assert no duplicates. | AC-1 to AC-15 | T6 | M | All acceptance criteria are checked, either by an automated test or by a recorded manual check in the table in §3.3. |
+| T8 | **Operations.** README (setup, config, log states), a runbook for `LOGIN_REQUIRED`, `CHAT_NOT_FOUND`, `SELECTOR_DRIFT` and Ollama down, and a start script. | NFR-1, NFR-3 | T7 | S | A new person can start it from the README alone. |
+
+## 3.2 Order and parallel tracks
+
+```text
+T0 → T1 → T2 ──────────────┐
+        ├→ T3 ─────────────┤
+        ├→ T4 → T4a ───────┼→ T6 → T7 → T8
+        └→ T5a → T5b ──────┤
+                └→ T5c ────┘
+```
+
+Suggested first slice: T0, T1, T2, T3. With the Coordinator and Publisher done, a fake Reader and fake Extractor already put a real order into the live Supabase app, which proves the end of the pipeline early. T5b has the highest uncertainty, so start a quick spike on it as soon as T1 is done.
+
+## 3.3 Acceptance traceability
+
+| AC | Checked by |
+|---|---|
+| AC-1, AC-2 | T4 unit + fixture set, T7 |
+| AC-3, AC-5 | T4 (`NotAnOrder` paths), T7 |
+| AC-4, AC-6 | T2 (duplicate key), T5a (restart), T7 |
+| AC-7 | T2 (retry), T3 (retryable statuses), T7 |
+| AC-8 to AC-14 | T4a unit tests on the date resolver, T4 fixtures |
+| AC-15 | T5c (created date) + T4a, T7 |
+
+## 3.4 Risks
+
+| # | Risk | Mitigation |
+|---|---|---|
+| R1 | Zalo Web search and group detection are not verified, and the page can change at any time. | Spike T5b early. Keep all selectors in `selectors.json`. `SELECTOR_DRIFT` and `CHAT_NOT_FOUND` are reported and never fail silently. |
+| R2 | Qwen 7B may get quantities or day words wrong. | The date comes from the code resolver (T4a), not only from the model. Measure accuracy on the fixture set. Strict validation. |
+| R3 | The message created date for old messages may not be exact on screen. | T5c uses the date separators. If an exact time is unavailable, hold the message (retry) and never fall back to the system date. |
+| R4 | Automating Zalo Web may break Zalo's terms. | Read-only, no sending, polling only every 2 s. The operator accepts this risk. |
+| R5 | A Zalo message key may not stay stable. | The spike relies on it. T5a keeps a test for it. If the key changes, fall back to a hash of sender, time and text. |
+
+# 4. Placeholders
+_Scenarios, test plan details, and rollout: to be written after the tasks are agreed._
