@@ -12,6 +12,7 @@ import logging
 import os
 import signal
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TextIO
@@ -22,7 +23,7 @@ from zalo_order_assistant.audit_log import SqliteAuditLog
 from zalo_order_assistant.coordinator import Coordinator
 from zalo_order_assistant.order_extractor import ExtractorConfig, OrderExtractor, create_extractor
 from zalo_order_assistant.order_publisher import PublisherConfig, SupabaseOrderPublisher, create_publisher
-from zalo_order_assistant.ports import MessageSource
+from zalo_order_assistant.ports import Mediator, MessageSource
 from zalo_order_assistant.zalo_reader import ReaderConfig, create_reader
 
 log = logging.getLogger("zalo_order_assistant")
@@ -140,8 +141,14 @@ class App:
             self.audit.close()
 
 
-def build(config: Config, *, on_status=None, reader: MessageSource | None = None) -> App:
-    """Create the Coordinator and the three colleagues and wire them. `reader` replaces the Zalo Reader (replay)."""
+def build(
+    config: Config,
+    *,
+    on_status: Callable[[str], None] | None = None,
+    reader_factory: Callable[[Mediator], MessageSource] | None = None,
+) -> App:
+    """Create the Coordinator and the three colleagues and wire them. `reader_factory` replaces the Zalo Reader
+    (for example with a Reader that replays recorded messages)."""
     audit = SqliteAuditLog(config.pipeline.audit_db_path)
     coordinator = Coordinator(
         audit,
@@ -150,7 +157,7 @@ def build(config: Config, *, on_status=None, reader: MessageSource | None = None
         max_backoff_seconds=config.pipeline.retry_max_backoff_seconds,
         on_status=on_status,
     )
-    source = reader if reader is not None else create_reader(coordinator, config.reader)
+    source = reader_factory(coordinator) if reader_factory else create_reader(coordinator, config.reader)
     extractor = create_extractor(coordinator, config.extractor)
     publisher = create_publisher(coordinator, config.publisher)
     coordinator.attach(source, extractor, publisher)

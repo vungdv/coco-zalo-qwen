@@ -1,0 +1,14 @@
+{"key": "g5/0", "sender": "Hà", "is_self": false, "text": "mai 2 phần", "sent_at": "2026-11-20T20:00:00+07:00", "expect": {"order": {"who": "Hà", "qty": 2, "date": "2026-11-21"}}}
+{"key": "g5/1", "sender": "Mai", "is_self": false, "text": "Mai đặt 2 phần, ship nhé", "sent_at": "2026-11-23T09:00:00+07:00", "expect": {"order": {"who": "Mai", "qty": 2, "date": "2026-11-24"}}}
+{"key": "g5/2", "sender": "Mai", "is_self": false, "text": "đặt cơm", "sent_at": "2026-11-23T09:01:00+07:00", "expect": {"order": {"who": "Mai", "qty": 1, "date": "2026-11-23"}}}
+{"key": "g5/3", "sender": "Lan", "is_self": false, "text": "ok nhé", "sent_at": "2026-11-23T09:02:00+07:00", "expect": {"audit": "not_an_order"}}
+{"key": "g5/4", "sender": "Hùng", "is_self": false, "text": "mai lấy 2 phần", "sent_at": "2026-11-23T09:03:00+07:00", "expect": {"order": {"who": "Hùng", "qty": 2, "date": "2026-11-24"}}}
+{"key": "g5/5", "sender": "Hùng", "is_self": false, "text": "hôm qua mình đặt 2 phần", "sent_at": "2026-11-23T09:04:00+07:00", "expect": {"audit": "not_an_order"}}
+{"key": "g5/6", "sender": "Mai", "is_self": false, "text": "mai 2 phần, kia 1 phần", "sent_at": "2026-11-23T09:05:00+07:00", "expect": {"audit": "not_an_order"}}
+{"key": "g5/7", "sender": "", "is_self": true, "text": "chị Lan 2 phần", "sent_at": "2026-11-23T09:06:00+07:00", "expect": {"audit": "skipped"}}
+{"key": "g5/8", "sender": "", "is_self": false, "text": "2 phần", "sent_at": "2026-11-23T09:07:00+07:00", "expect": {"audit": "skipped"}}
+{"key": "g5/9", "sender": "Lan", "is_self": false, "text": "thứ sáu 1 phần", "sent_at": "2026-11-23T09:08:00+07:00", "expect": {"order": {"who": "Lan", "qty": 1, "date": "2026-11-27"}}}
+{"key": "g5/10", "sender": "Lan", "is_self": false, "text": "đã nhận 2 phần rồi nhé", "sent_at": "2026-11-23T09:09:00+07:00", "expect": {"audit": "not_an_order"}}
+{"key": "g5/11", "sender": "Tú", "is_self": false, "text": "28/11 đặt 2 phần", "sent_at": "2026-11-23T09:10:00+07:00", "expect": {"order": {"who": "Tú", "qty": 2, "date": "2026-11-28"}}}
+{"key": "g5/12", "sender": "Mai", "is_self": false, "text": "đặt thêm 3 phần nữa nhé", "sent_at": "2026-11-23T09:11:00+07:00", "expect": {"order": {"who": "Mai", "qty": 3, "date": "2026-11-23"}}}
+{"key": "g5/13", "sender": "Tú", "is_self": false, "text": "31/11 2 phần", "sent_at": "2026-11-23T09:12:00+07:00", "expect": {"audit": "not_an_order"}}

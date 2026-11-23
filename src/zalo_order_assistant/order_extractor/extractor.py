@@ -97,7 +97,7 @@ class OrderExtractor:
             return NotAnOrder(key, v.reason)
         when = day.date or created  # FR-6b: no day word -> the created date
         model_day = parse_model_date(answer.args.get("date"))
-        if model_day != day.date:  # the model invented, missed or miscounted a day: the resolver wins
+        if model_day is not None and model_day != when:  # the model invented or miscounted a day: resolver wins
             model_text = model_day.isoformat() if isinstance(model_day, date) else model_day
             log.info("date_corrected key=%s model=%s resolved=%s", key, model_text, when.isoformat())
         log.info("order_extracted key=%s qty=%d date=%s", key, v.qty, when.isoformat())

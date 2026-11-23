@@ -115,7 +115,7 @@ class ReplaySource:
 def test_starts_and_stops_cleanly(tmp_path):
     source = ReplaySource()
     lines: list[str] = []
-    app = build(Config.from_env(env(tmp_path)), on_status=lines.append, reader=source)
+    app = build(Config.from_env(env(tmp_path)), on_status=lines.append, reader_factory=lambda _m: source)
     t = threading.Thread(target=app.run)
     t.start()
     assert source.started.wait(2)

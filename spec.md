@@ -412,6 +412,38 @@ Suggested first slice: T0, T1, T2, T3. With the Coordinator and Publisher done, 
 | AC-8 to AC-14, AC-17 to AC-22 | T4a unit tests on the date resolver, T4 fixtures |
 | AC-15, AC-26 | T5c (created date, unknown time) + T4a, T7 |
 
+### Results (T7, 2026-11-23)
+
+Automated: `uv run pytest` (unit), `uv run pytest -m e2e` (replayed chat, real local Qwen, Supabase stand-in with the `orders` contract or a real test project via `E2E_SUPABASE_URL`/`E2E_SUPABASE_API_KEY`), `uv run pytest -m llm` (fixture set), `uv run pytest -m browser` (chat search scripts in a headless browser).
+
+| AC | Status | Test |
+|---|---|---|
+| AC-1 | Pass | `tests/e2e/test_e2e.py::test_one_order_per_order_message_none_for_chat_AC1_to_AC23`, `test_extractor.py::test_order_AC1` |
+| AC-2 | Pass | e2e (g5/2), `test_extractor.py::test_validate` |
+| AC-3 | Pass | e2e (g5/3), fixture set |
+| AC-4 | Pass | `test_e2e.py::test_restart_mid_run_and_replay_again_make_no_duplicates_AC4`, `test_coordinator.py::test_duplicate_key_is_queued_once_AC4`, `test_adapter.py::test_restart_does_not_re_emit_acked_messages` |
+| AC-5 | Pass | e2e (g5/5), `test_day_words.py::test_day_word_rejections_never_reach_the_model` |
+| AC-6 | Pass | e2e (g5/12), `test_coordinator.py::test_second_separate_message_makes_a_second_order_AC6` |
+| AC-7 | Pass | `test_coordinator.py::test_supabase_down_holds_then_saves_once_without_reextracting_AC7`, `test_order_publisher.py::test_failure_kinds` |
+| AC-8 to AC-14, AC-17 to AC-20, AC-22 | Pass | `test_day_words.py::test_resolution`, e2e (g5/4, g5/6, g5/9, g5/13) |
+| AC-15 | Pass | e2e (g5/0, written 2026-11-20), `test_day_words.py::test_backfilled_message_keeps_its_own_day_AC15` |
+| AC-16 | Pass | e2e (g5/10), fixture set |
+| AC-21 | Pass | `test_day_words.py::test_horizon_AC21`, `test_beyond_horizon_AC21` |
+| AC-23 | Pass | e2e (g5/7), `test_coordinator.py::test_own_message_is_skipped_recorded_and_acked_AC23` |
+| AC-24 | Pass | `test_coordinator.py::test_per_message_failure_retries_with_backoff_then_acks_at_cap_AC24` |
+| AC-25 | Pass | `test_e2e.py::test_revoked_key_holds_the_queue_then_recovers_AC25`, `test_coordinator.py::test_revoked_key_shows_unauthorized_acks_nothing_and_recovers_AC25` |
+| AC-26 | Pass | `test_time.py::test_bubble_with_no_time_is_not_emitted_and_not_acked_AC26` |
+
+Manual checks still open (they need the operator's live accounts):
+
+| Check | Task | How |
+|---|---|---|
+| Create, then update without resetting `delivered`, in the real Supabase app | T3 | `uv run python scripts/check_publisher.py` |
+| The configured group opens from a cold start on live Zalo Web; a same-titled private chat is ignored; a wrong title gives `CHAT_NOT_FOUND`; confirm the `search_result_item` selector | T5b | run the assistant with `ZALO_CHAT` set, see README "Verifying the chat search" |
+| E2E against a Supabase test project | T7 | `E2E_SUPABASE_URL=... E2E_SUPABASE_API_KEY=... uv run pytest -m e2e` |
+
+Extractor accuracy on the 69-message fixture set (synthetic, not real chat data): 97% fully correct, dates 98% ([reports/extractor-accuracy.md](reports/extractor-accuracy.md)). The pass mark (risk R2) is still to be set from real chat data.
+
 ## 3.4 Risks
 
 | # | Risk | Mitigation |
