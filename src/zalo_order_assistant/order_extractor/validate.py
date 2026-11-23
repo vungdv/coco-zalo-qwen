@@ -1,4 +1,4 @@
-"""Validation of the model answer (spec §1.3, §1.4). First failure wins. Pure functions, no I/O."""
+"""Validation of the model answer (spec §1.3). First failure wins. Pure functions, no I/O."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from zalo_order_assistant.order_extractor.calendar import INVALID_DATE, check_range
+from zalo_order_assistant.order_extractor.calendar import INVALID_DATE
 
 MAX_QTY = 99  # sanity bound: a larger number is a phone number or an address the model misread, not portions
 BAD_QUANTITY = "bad quantity"
@@ -16,7 +16,6 @@ SEVERAL_ORDERS = "several orders"
 @dataclass(frozen=True)
 class Valid:
     qty: int
-    date: date
 
 
 @dataclass(frozen=True)
@@ -40,7 +39,7 @@ def parse_qty(raw: object) -> int | None:
 
 
 def parse_model_date(raw: object) -> date | None | str:
-    """The model's date: a date, None when it named none, or INVALID_DATE."""
+    """The model's date, only to log a disagreement with the resolver: a date, None, or INVALID_DATE."""
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         return None
     if not isinstance(raw, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw.strip()):
@@ -51,17 +50,11 @@ def parse_model_date(raw: object) -> date | None | str:
         return INVALID_DATE
 
 
-def validate(args: dict, created: date, max_days_ahead: int) -> Valid | Rejected:
+def validate(args: dict) -> Valid | Rejected:
+    """The model's record_order arguments. The date is not taken from the model: see day_words.resolve."""
     if args.get("multipleOrders") is True:
         return Rejected(SEVERAL_ORDERS)
     qty = parse_qty(args.get("qty"))
     if qty is None:
         return Rejected(BAD_QUANTITY)
-    d = parse_model_date(args.get("date"))
-    if isinstance(d, str):
-        return Rejected(d)
-    if d is None:
-        return Valid(qty, created)  # FR-6b: no day word -> the created date
-    if reason := check_range(d, created, max_days_ahead):
-        return Rejected(reason)
-    return Valid(qty, d)
+    return Valid(qty)

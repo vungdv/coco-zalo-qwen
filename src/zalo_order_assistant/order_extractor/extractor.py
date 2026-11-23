@@ -10,11 +10,12 @@ import logging
 import os
 from concurrent.futures import Executor, ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from zalo_order_assistant.events import VN_TZ, ExtractFailed, FailureKind, Message, NotAnOrder, Order, OrderExtracted
+from zalo_order_assistant.order_extractor.day_words import resolve
 from zalo_order_assistant.order_extractor.llm import IGNORE_REASONS, Llm, LlmInvalid, LlmTimeout, LlmUnavailable
-from zalo_order_assistant.order_extractor.validate import Rejected, validate
+from zalo_order_assistant.order_extractor.validate import Rejected, parse_model_date, validate
 from zalo_order_assistant.ports import Mediator
 
 log = logging.getLogger(__name__)
@@ -74,6 +75,9 @@ class OrderExtractor:
         who = message.sender.strip()
         if not who:
             return NotAnOrder(key, "no sender name")
+        day = resolve(message.text, created, self.max_days_ahead)
+        if day.reason:  # past day, invalid date, several days, beyond the horizon: no need to ask the model
+            return NotAnOrder(key, day.reason)
         try:
             answer = self._llm.classify(message.text, created)
         except LlmUnavailable as e:
@@ -88,11 +92,16 @@ class OrderExtractor:
         if not answer.is_order:
             reason = answer.args.get("reason")
             return NotAnOrder(key, f"model: {reason if reason in IGNORE_REASONS else 'other'}")
-        v = validate(answer.args, created, self.max_days_ahead)
+        v = validate(answer.args)
         if isinstance(v, Rejected):
             return NotAnOrder(key, v.reason)
-        log.info("order_extracted key=%s qty=%d date=%s", key, v.qty, v.date.isoformat())
-        return OrderExtracted(Order(key, who, v.qty, v.date.isoformat(), message.text[:MESSAGE_MAX_CHARS]))
+        when = day.date or created  # FR-6b: no day word -> the created date
+        model_day = parse_model_date(answer.args.get("date"))
+        if model_day != day.date:  # the model invented, missed or miscounted a day: the resolver wins
+            model_text = model_day.isoformat() if isinstance(model_day, date) else model_day
+            log.info("date_corrected key=%s model=%s resolved=%s", key, model_text, when.isoformat())
+        log.info("order_extracted key=%s qty=%d date=%s", key, v.qty, when.isoformat())
+        return OrderExtracted(Order(key, who, v.qty, when.isoformat(), message.text[:MESSAGE_MAX_CHARS]))
 
     def close(self) -> None:
         if isinstance(self._pool, ThreadPoolExecutor):

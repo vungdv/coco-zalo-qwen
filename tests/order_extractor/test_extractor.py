@@ -133,20 +133,15 @@ def test_qty(raw, qty):
 @pytest.mark.parametrize(
     "args,expected",
     [
-        ({"qty": 2, "date": "2026-11-24"}, Valid(2, D("2026-11-24"))),
-        ({"qty": 2}, Valid(2, MON)),  # AC-13: no day word -> created date
-        ({}, Valid(1, MON)),  # AC-2: no quantity -> 1
-        ({"qty": 2, "date": ""}, Valid(2, MON)),
-        ({"qty": 2, "date": "2026-11-22"}, Rejected("past day")),  # AC-5
-        ({"qty": 2, "date": "2026-12-25"}, Rejected("beyond horizon")),
-        ({"qty": 2, "date": "2026-11-31"}, Rejected("invalid date")),
-        ({"qty": 2, "date": "24/11"}, Rejected("invalid date")),
-        ({"qty": 2, "multipleOrders": True}, Rejected("several orders")),  # AC-14
+        ({"qty": 2, "date": "2026-11-24"}, Valid(2)),
+        ({}, Valid(1)),  # AC-2: no quantity -> 1
+        ({"qty": 2, "multipleOrders": True}, Rejected("several orders")),
+        ({"qty": 2, "multipleOrders": False}, Valid(2)),
         ({"qty": 0}, Rejected("bad quantity")),
     ],
 )
 def test_validate(args, expected):
-    assert validate(args, MON, 31) == expected
+    assert validate(args) == expected
 
 
 # --- model client failure kinds -------------------------------------------------------------------------------------
@@ -259,7 +254,7 @@ def test_reference_day_is_the_created_date_in_vietnam_not_utc():
     llm = FakeLlm(Answer(True, {"qty": 1}))
     ex = OrderExtractor(Recorder(), llm, executor=Inline())
     e = ex.extract_now(message(sent_at=datetime.fromisoformat("2026-11-22T17:30:00+00:00")))  # 00:30 on the 23rd in VN
-    assert llm.created == D("2026-11-23") and isinstance(e, OrderExtracted) and e.order.date == "2026-11-23"
+    assert llm.created == D("2026-11-23") and isinstance(e, OrderExtracted) and e.order.date == "2026-11-24"  # "mai"
 
 
 def test_backfilled_message_resolves_against_its_own_day_AC15():
@@ -277,7 +272,7 @@ def test_text_is_cut_at_2000():
     [
         (Answer(False, {"reason": "receipt"}), "model: receipt"),  # AC-16
         (Answer(False, {"reason": "Mai said: secret"}), "model: other"),  # model text never reaches the audit log
-        (Answer(True, {"qty": 2, "date": "2026-11-22"}), "past day"),
+        (Answer(True, {"qty": 2, "multipleOrders": True}), "several orders"),
     ],
 )
 def test_not_an_order(answer, reason):
