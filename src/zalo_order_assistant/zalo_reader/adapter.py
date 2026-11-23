@@ -4,7 +4,10 @@ Ported from the zalo-adater spike (`adapter.py`). Changes for the push design:
 - the history of a chat is backfilled once each time the chat is opened, not again on every poll until all of it is
   acked: the Coordinator holds what was emitted, and a restart backfills again;
 - `ack(key)` replaces `mark_published(keys)`;
-- a sender with no display name is "" (FR-4) instead of the numeric uid.
+- a sender with no display name is "" (FR-4) instead of the numeric uid;
+- a bubble whose time cannot be read (sent_at_ms 0, or before 2020) is never emitted and so never acked: it is
+  logged as time_unknown and read again later (FR-6a, AC-26). If it was only reached by scrolling up, the history
+  is read again after `rebackfill_seconds`. It is never given a default time.
 """
 
 from __future__ import annotations
@@ -23,6 +26,8 @@ from zalo_order_assistant.zalo_reader.reader import Conversation, PageState, Rea
 from zalo_order_assistant.zalo_reader.store import AckedStore
 
 log = logging.getLogger(__name__)
+
+EARLIEST_MS = 1_577_811_600_000  # 2020-01-01 00:00 +07:00: anything earlier is not a real Zalo message time
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,7 @@ class ZaloWebAdapter:
         clock: Callable[[], float] = time.time,
         settle_seconds: float = 0.6,
         sleep: Callable[[float], None] = time.sleep,
+        rebackfill_seconds: float = 300.0,
     ) -> None:
         self.driver = driver
         self.store = store
@@ -54,7 +60,9 @@ class ZaloWebAdapter:
         self.clock = clock
         self.settle_seconds = settle_seconds
         self.sleep = sleep
+        self.rebackfill_seconds = rebackfill_seconds
         self._synced: str | None = None  # conversation key whose history has been read since it was opened
+        self._rebackfill_at: float | None = None  # set when the history held bubbles with no readable time
 
     def read_page(self) -> tuple[PageState | None, PollResult | None]:
         """Read the page once. Returns (page, None) when a chat is readable, else (None, the state to report)."""
@@ -98,8 +106,14 @@ class ZaloWebAdapter:
         conv = page.conversation
         raws: list[ReaderMessage] = list(page.messages)
         senders = dict(page.senders)
-        if self.scroll_script is not None and conv.key != self._synced:
-            log.info("conversation_opened key=%s: reading %g days of history", conv.key, self.backfill_days)
+        due = self._rebackfill_at is not None and self.clock() >= self._rebackfill_at
+        if self.scroll_script is not None and (conv.key != self._synced or due):
+            log.info(
+                "history_read key=%s days=%g reason=%s",
+                conv.key,
+                self.backfill_days,
+                "time_unknown_retry" if conv.key == self._synced else "chat_opened",
+            )
             try:
                 full, senders = self._backfill(page)
             except BrowserError as exc:
@@ -108,6 +122,8 @@ class ZaloWebAdapter:
                 return PollResult(ReaderStatus.READY)
             raws = full
             self._synced = conv.key
+            unknown = sum(1 for m in full if m.kind == "text" and m.sent_at_ms < EARLIEST_MS)
+            self._rebackfill_at = self.clock() + self.rebackfill_seconds if unknown else None
         return PollResult(ReaderStatus.READY, self._to_messages(conv, senders, raws))
 
     def _backfill(self, first: PageState) -> tuple[list[ReaderMessage] | None, dict[str, str]]:
@@ -155,6 +171,9 @@ class ZaloWebAdapter:
         for raw in sorted(raws, key=lambda m: m.sent_at_ms):
             key = f"{conv.key}/{raw.message_key}"
             if raw.kind != "text" or not raw.text or self.store.contains(key):
+                continue
+            if raw.sent_at_ms < EARLIEST_MS:  # not emitted, not acked: read again once the bubble has a time
+                log.warning("time_unknown key=%s", key)
                 continue
             sender = (
                 raw.sender

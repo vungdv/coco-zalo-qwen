@@ -38,8 +38,19 @@ def page(messages, **kw):
     }
 
 
+BASE = 1_795_400_000_000  # 2026-11-23: small test times are offsets from here (a 1970 time counts as unknown)
+
+
 def raw(key, ts, text="hi", kind="text", **kw):
-    return {"message_key": key, "sent_at_ms": ts, "sender_uid": "u1", "sender": "An", "kind": kind, "text": text, **kw}
+    return {
+        "message_key": key,
+        "sent_at_ms": BASE + ts,
+        "sender_uid": "u1",
+        "sender": "An",
+        "kind": kind,
+        "text": text,
+        **kw,
+    }
 
 
 def make(value=None, error=None, store=None):
@@ -151,7 +162,7 @@ def test_backfill_stops_at_the_day_window():
     day = 86400 * 1000
     now = 10 * day
     windows = [[raw("a", now - 1000)], [raw("b", now - 2 * day)], [raw("c", now - 4 * day)], [raw("d", now - 5 * day)]]
-    a, _, d = make_backfill(windows, backfill_days=3, clock=lambda: now / 1000)
+    a, _, d = make_backfill(windows, backfill_days=3, clock=lambda: (BASE + now) / 1000)
     assert [m.key for m in a.poll().messages] == ["g1/b", "g1/a"]  # c is older than 3 days: dropped; d never loaded
     assert d.i == 2
 

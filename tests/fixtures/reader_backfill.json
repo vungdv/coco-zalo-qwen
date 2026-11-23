@@ -1,0 +1,91 @@
+{
+ "_about": "Reader output (reader.js readState) while backfilling a group chat, newest window first. Synthetic messages; shape and timestamps as produced by reader.js. 'now' is 2026-11-23T09:00+07:00.",
+ "now_ms": 1795399200000,
+ "conversation": {
+  "key": "g5",
+  "title": "Bếp Phương Bắc - Đặt cơm",
+  "is_group": true
+ },
+ "windows": [
+  [
+   {
+    "message_key": "c",
+    "sent_at_ms": 1795366800000,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "mai 1 phần"
+   },
+   {
+    "message_key": "d",
+    "sent_at_ms": 1795396500000,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "2 phần"
+   },
+   {
+    "message_key": "h0",
+    "sent_at_ms": 0,
+    "sender_uid": "unknown",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "ok nhé"
+   }
+  ],
+  [
+   {
+    "message_key": "a",
+    "sent_at_ms": 1795366799999,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "mai 2 phần"
+   },
+   {
+    "message_key": "x",
+    "sent_at_ms": 1795323600000,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "sticker",
+    "text": "[sticker]"
+   }
+  ],
+  [
+   {
+    "message_key": "e",
+    "sent_at_ms": 1795140000000,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "mai 2 phần"
+   },
+   {
+    "message_key": "f",
+    "sent_at_ms": 1795139940000,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "2 phần"
+   }
+  ],
+  [
+   {
+    "message_key": "old",
+    "sent_at_ms": 1795046400000,
+    "sender_uid": "u1",
+    "sender": "Mai",
+    "is_self": false,
+    "kind": "text",
+    "text": "2 phần"
+   }
+  ]
+ ]
+}
