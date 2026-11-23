@@ -243,3 +243,25 @@ def test_no_target_and_nothing_open_waits():
 def test_login_required_passes_through():
     p, op, _ = poller(PageDriver(state="LOGIN"))
     assert p.poll().state is ReaderStatus.LOGIN_REQUIRED and op.calls == 0
+
+
+def test_a_click_that_does_not_open_the_chat_backs_off():
+    page = PageDriver(state="NO_CHAT")
+
+    class ClickNoEffect(FakeOpener):
+        def open(self, target):
+            self.calls += 1
+            return True  # clicked, but the page does not change
+
+    adapter = ZaloWebAdapter(page, AckedStore(":memory:"), "js")
+    op, clock = ClickNoEffect(page), Clock()
+    p = TargetedPoller(adapter, op, TARGET, clock=clock)  # type: ignore[arg-type]
+    p.poll()
+    clock.t += 6
+    p.poll()  # second click: verify window passed
+    clock.t += 6
+    p.poll()
+    assert op.calls == 2  # now waits the full 30 s
+    clock.t += 30
+    p.poll()
+    assert op.calls == 3

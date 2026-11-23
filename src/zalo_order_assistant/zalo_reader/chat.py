@@ -180,6 +180,7 @@ class TargetedPoller:
         self.clock = clock
         self._next_open_at = 0.0
         self._last_open_failed = False
+        self._clicked = False  # the last attempt clicked the chat; not yet seen open
 
     def ack(self, key: str) -> None:
         self.adapter.ack(key)
@@ -198,7 +199,7 @@ class TargetedPoller:
                 return PollResult(ReaderStatus.NO_CHAT_OPEN)
             return self.adapter.poll_page(page)
         if conv.is_group and normalize_title(conv.title or "") == normalize_title(self.target):
-            self._next_open_at, self._last_open_failed = 0.0, False
+            self._next_open_at, self._last_open_failed, self._clicked = 0.0, False, False
             return self.adapter.poll_page(page)
         return self._open()
 
@@ -214,6 +215,11 @@ class TargetedPoller:
             return PollResult(ReaderStatus.BROWSER_FAILED)
         self._last_open_failed = not opened
         if not opened:
+            self._clicked = False
             return PollResult(ReaderStatus.CHAT_NOT_FOUND)
-        self._next_open_at = now + min(self.retry_open_seconds, 5.0)  # clicked: verify on the next poll
+        if self._clicked:  # the previous click did not open it either: back off to the normal interval
+            log.warning("chat_open_unverified: clicked but the chat header does not match")
+        else:
+            self._next_open_at = now + min(self.retry_open_seconds, 5.0)  # verify on the next poll
+        self._clicked = True
         return PollResult(ReaderStatus.NO_CHAT_OPEN)
