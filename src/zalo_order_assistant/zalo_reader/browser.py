@@ -36,6 +36,9 @@ class Driver(Protocol):
     def ensure_open(self) -> None: ...
     def eval_json(self, js: str) -> Any: ...
     def relaunch(self) -> bool: ...  # True while the caller may keep going
+    def fill(self, selector: str, text: str) -> None: ...
+    def click(self, selector: str) -> None: ...
+    def press(self, key: str) -> None: ...
 
 
 class BrowserDriver:
@@ -86,6 +89,16 @@ class BrowserDriver:
             raise EvalError("eval returned non-JSON output") from None
         self.consecutive_failures = 0
         return value
+
+    def fill(self, selector: str, text: str) -> None:
+        """Real typing into the element (React sees it). Used only to search for the configured chat."""
+        self._call(self._sess("fill", selector, text), EVAL_TIMEOUT_SECONDS)
+
+    def click(self, selector: str) -> None:
+        self._call(self._sess("click", selector), EVAL_TIMEOUT_SECONDS)
+
+    def press(self, key: str) -> None:
+        self._call(self._sess("press", key), EVAL_TIMEOUT_SECONDS)
 
     def relaunch(self) -> bool:
         self.consecutive_failures += 1

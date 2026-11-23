@@ -16,5 +16,12 @@
   "time_label": ".card-send-time__sendTime",
   "kind_image": ".chatImageMessage--audit",
   "kind_sticker": "[class*=\"sticker\"]",
-  "kind_file": "[class*=\"file-message\"]"
+  "kind_file": "[class*=\"file-message\"]",
+  "search_input": "#contact-search-input",
+  "chat_list_item": "#conversationList .msg-item",
+  "search_result_item": "#searchResultList .msg-item, [class*=\"search-result\"] .msg-item, [class*=\"search-result\"] [anim-data-id]",
+  "conv_item_title": ".conv-item-title__name .truncate",
+  "conv_item_id_attr": "anim-data-id",
+  "conv_item_group_marker": ".community__conv-indicator",
+  "_note_chat_search": "search_input, chat_list_item, conv_item_* checked read-only on live Zalo Web 2026-11-23; search_result_item is a guess until verified live (T5b)"
 }

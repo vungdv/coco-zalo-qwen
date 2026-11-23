@@ -22,10 +22,11 @@ artifacts = ["src/zalo_order_assistant/zalo_reader/*.js", "src/zalo_order_assist
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not e2e and not llm'"
+addopts = "-m 'not e2e and not llm and not browser'"
 markers = [
     "e2e: end-to-end run with real Qwen and Supabase (or the local fake); run with -m e2e",
     "llm: needs the local Ollama model; run with -m llm",
+    "browser: runs scripts in a headless playwright-cli browser; run with -m browser",
 ]
 
 [tool.ruff]
