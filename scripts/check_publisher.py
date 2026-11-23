@@ -10,7 +10,7 @@ order must stay delivered. Delete the test order in the app afterwards.
 from __future__ import annotations
 
 import time
-from datetime import date
+from datetime import date, datetime
 
 from dotenv import load_dotenv
 
@@ -28,9 +28,9 @@ def main() -> None:
     p = SupabaseOrderPublisher(_Print(), PublisherConfig.from_env())
     key = f"manual-check/{int(time.time())}"
     today = date.today().isoformat()
-    print("create:", p.publish_now(Order(key, "T3 publisher check", 1, today, "T3 publisher check, safe to delete")))
+    print("create:", p.publish_now(Order(key, "T3 publisher check", 1, today, "T3 publisher check, safe to delete", datetime.now().astimezone())))
     input(f"Tick the order external_id={key} delivered in the web app, then press Enter... ")
-    print("update:", p.publish_now(Order(key, "T3 publisher check", 2, today, "T3 publisher check, updated")))
+    print("update:", p.publish_now(Order(key, "T3 publisher check", 2, today, "T3 publisher check, updated", datetime.now().astimezone())))
     print("Now check in the app: quantity is 2 and the order is still delivered.")
 
 

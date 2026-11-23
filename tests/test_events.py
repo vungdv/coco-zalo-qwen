@@ -9,7 +9,7 @@ from zalo_order_assistant.events import VN_TZ, FailureKind, Message, Order, Publ
 
 def test_message_text_is_never_in_repr():
     m = Message("g1/1", "Shop", "Mai", False, "secret text", datetime(2026, 11, 23, 9, tzinfo=VN_TZ))
-    o = Order("g1/1", "Mai", 2, "2026-11-24", "secret text")
+    o = Order("g1/1", "Mai", 2, "2026-11-24", "secret text", datetime(2026, 11, 23, 9, tzinfo=VN_TZ))
     assert "secret text" not in repr(m) and "secret text" not in repr(o)
 
 

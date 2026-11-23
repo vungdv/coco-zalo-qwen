@@ -54,6 +54,7 @@ class Order:
     qty: int
     date: str  # YYYY-MM-DD
     message: str = field(repr=False)
+    placed_at: datetime  # when the customer sent the message (Message.sent_at), tz-aware
 
 
 # --- Reader -> Coordinator ------------------------------------------------------------------------------------------

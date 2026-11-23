@@ -2,7 +2,7 @@
 
 POST {SUPABASE_URL}/functions/v1/orders with `x-api-key`. The function is an idempotent upsert on
 (source, external_id) and external_id is the Zalo message key, so a retry never duplicates an order. `delivered` is
-never sent, so an update never resets it (Supabase S18). The API key and the message text are never logged.
+never sent, so an update never resets it (Supabase S18). `placed_at` is the Zalo message time. The API key and the message text are never logged.
 
 Runs on its own worker thread: `publish()` returns at once and the result arrives as an event.
 """
@@ -53,6 +53,8 @@ def build_payload(order: Order) -> dict:
         "quantity": order.qty,
         "delivery_date": order.date,
         "message": order.message[:MESSAGE_MAX_CHARS],
+        # the message time, not the publish time: a backfilled or retried order keeps when it was placed
+        "placed_at": order.placed_at.isoformat(timespec="seconds"),
     }
 
 

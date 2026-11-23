@@ -101,7 +101,7 @@ class OrderExtractor:
             model_text = model_day.isoformat() if isinstance(model_day, date) else model_day
             log.info("date_corrected key=%s model=%s resolved=%s", key, model_text, when.isoformat())
         log.info("order_extracted key=%s qty=%d date=%s", key, v.qty, when.isoformat())
-        return OrderExtracted(Order(key, who, v.qty, when.isoformat(), message.text[:MESSAGE_MAX_CHARS]))
+        return OrderExtracted(Order(key, who, v.qty, when.isoformat(), message.text[:MESSAGE_MAX_CHARS], sent_at))
 
     def close(self) -> None:
         if isinstance(self._pool, ThreadPoolExecutor):

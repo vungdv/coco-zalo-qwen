@@ -36,7 +36,7 @@ def msg(key: str, sender: str = "Mai", is_self: bool = False, text: str = SECRET
 
 
 def order(key: str) -> Order:
-    return Order(key, "Mai", 2, "2026-11-24", SECRET_TEXT)
+    return Order(key, "Mai", 2, "2026-11-24", SECRET_TEXT, SENT)
 
 
 class FakeSource:

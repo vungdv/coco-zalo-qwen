@@ -10,11 +10,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from zalo_order_assistant.events import FailureKind, Order, OrderPublished, PublishFailed
+from datetime import datetime
+
+from zalo_order_assistant.events import VN_TZ, FailureKind, Order, OrderPublished, PublishFailed
 from zalo_order_assistant.order_publisher import PublisherConfig, SupabaseOrderPublisher, build_payload
 
 TEXT = "Mai đặt 2 phần, ship nhé"
-ORDER = Order("g123/1732330800000_42", "Mai", 2, "2026-11-24", TEXT)
+PLACED = datetime(2026, 11, 23, 8, 5, 7, 123456, tzinfo=VN_TZ)
+ORDER = Order("g123/1732330800000_42", "Mai", 2, "2026-11-24", TEXT, PLACED)
 API_KEY = "sk-test-SECRET"
 
 
@@ -82,11 +85,18 @@ def test_payload_maps_fields_and_never_sends_delivered():
         "quantity": 2,
         "delivery_date": "2026-11-24",
         "message": TEXT,
+        "placed_at": "2026-11-23T08:05:07+07:00",
     }
 
 
+def test_placed_at_is_the_message_time_with_offset_so_a_backfilled_order_keeps_its_real_time():
+    # Given a message sent at 08:05 VN but published hours later, Then Supabase receives 08:05 +07:00, not now
+    assert build_payload(ORDER)["placed_at"] == "2026-11-23T08:05:07+07:00"
+    assert datetime.fromisoformat(build_payload(ORDER)["placed_at"]) == PLACED.replace(microsecond=0)
+
+
 def test_message_is_cut_at_2000_chars():
-    long = Order("k", "Mai", 1, "2026-11-24", "x" * 2500)
+    long = Order("k", "Mai", 1, "2026-11-24", "x" * 2500, PLACED)
     assert len(build_payload(long)["message"]) == 2000
 
 

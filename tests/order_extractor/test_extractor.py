@@ -250,6 +250,12 @@ def test_order_AC1():
     assert (e.order.key, e.order.who, e.order.qty, e.order.message) == ("g1/1", "Mai", 2, "Mai đặt 2 phần, ship nhé")
 
 
+def test_order_is_placed_at_the_message_time_not_the_processing_time():
+    sent = datetime(2026, 11, 20, 7, 15, tzinfo=VN_TZ)  # read days later (backfill)
+    e = run(Answer(True, {"qty": 2}), sent_at=sent)
+    assert isinstance(e, OrderExtracted) and e.order.placed_at == sent
+
+
 def test_reference_day_is_the_created_date_in_vietnam_not_utc():
     llm = FakeLlm(Answer(True, {"qty": 1}))
     ex = OrderExtractor(Recorder(), llm, executor=Inline())
