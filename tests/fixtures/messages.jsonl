@@ -58,7 +58,7 @@
 {"id": 58, "text": "Mọi người ơi tối nay đi nhậu không", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "chat"}}
 {"id": 59, "text": "Menu mai: cơm gà, bún chả. Ai đặt thì comment nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "announcement"}}
 {"id": 60, "text": "bên kia còn 2 phần không chị", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}
-{"id": 61, "text": "e hủy đơn mai nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "cancel"}}
+{"id": 61, "text": "e hủy đơn mai nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-24"}}
 {"id": 62, "text": "đơn của e 2 phần đã giao chưa ạ", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}
 {"id": 63, "text": "Mai đặt 2 phần cho mình, Lan đặt 1 phần", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "several orders"}}
 {"id": 64, "text": "2 phần cho mai, 3 phần cho thứ 6", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "several dates"}}
@@ -72,3 +72,30 @@
 {"id": 72, "text": "Mai toi 1s", "created": "2026-11-20T20:00:00+07:00", "expect": {"order": true, "qty": 1, "date": "2026-11-21"}}
 {"id": 73, "text": "Mai toi 1s.", "created": "2026-11-20T20:00:00+07:00", "expect": {"order": true, "qty": 1, "date": "2026-11-21"}}
 {"id": 74, "text": "Mai toi 5s.", "created": "2026-11-20T20:00:00+07:00", "expect": {"order": true, "qty": 5, "date": "2026-11-21"}}
+{"id": 75, "text": "bớt 1 phần", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "reduce", "qty": 1, "date": "2026-11-23"}}
+{"id": 76, "text": "giảm 2 suất nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "reduce", "qty": 2, "date": "2026-11-23"}}
+{"id": 77, "text": "hủy 1 phần", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "reduce", "qty": 1, "date": "2026-11-23"}}
+{"id": 78, "text": "bớt 1s", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "reduce", "qty": 1, "date": "2026-11-23"}}
+{"id": 79, "text": "mai bớt cho e 1 phần", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "reduce", "qty": 1, "date": "2026-11-24"}}
+{"id": 80, "text": "kia bớt 1 phần", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "reduce", "qty": 1, "date": "2026-11-25"}}
+{"id": 81, "text": "sửa lại 3 phần", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 3, "date": "2026-11-23"}}
+{"id": 82, "text": "đổi thành 2 phần nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 2, "date": "2026-11-23"}}
+{"id": 83, "text": "còn 2 phần thôi chị", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 2, "date": "2026-11-23"}}
+{"id": 84, "text": "vẫn 2 phần nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 2, "date": "2026-11-23"}}
+{"id": 85, "text": "chốt 2 phần mai", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 2, "date": "2026-11-24"}}
+{"id": 86, "text": "nhớ 2 phần mai nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 2, "date": "2026-11-24"}}
+{"id": 87, "text": "sua lai 4 phan", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 4, "date": "2026-11-23"}}
+{"id": 88, "text": "hủy nhé chị", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-23"}}
+{"id": 89, "text": "mai không lấy nữa nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-24"}}
+{"id": 90, "text": "thôi chị ơi e không đặt nữa", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-23"}}
+{"id": 91, "text": "huy don", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-23"}}
+{"id": 92, "text": "kia hủy nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-25"}}
+{"id": 93, "text": "hủy hết nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "cancel", "qty": null, "date": "2026-11-23"}}
+{"id": 94, "text": "thêm 1 suất", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "add", "qty": 1, "date": "2026-11-23"}}
+{"id": 95, "text": "lấy thêm 1 hộp nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "add", "qty": 1, "date": "2026-11-23"}}
+{"id": 96, "text": "bớt đi nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "bad quantity"}}
+{"id": 97, "text": "hôm qua hủy rồi", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "past"}}
+{"id": 98, "text": "còn cơm không chị?", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}
+{"id": 99, "text": "hủy đơn hôm qua giúp e", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "past"}}
+{"id": 100, "text": "bớt 1 phần mai, kia thêm 2", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "several dates"}}
+{"id": 101, "text": "đơn mai của e vẫn giao chứ ạ?", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}

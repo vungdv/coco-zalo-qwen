@@ -50,7 +50,26 @@ WEEKDAYS = {  # date.weekday()
 }
 SHORT_WEEKDAYS = {"t2": 0, "t3": 1, "t4": 2, "t5": 3, "t6": 4, "t7": 5, "cn": 6}
 NUMBER_WORDS = _forms("một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín", "mười")
-ORDER_WORDS = _forms("đặt", "lấy", "cho", "order", "book", "đăng", "ship", "giao", "xin", "để")
+ORDER_WORDS = _forms(
+    "đặt",
+    "lấy",
+    "cho",
+    "order",
+    "book",
+    "đăng",
+    "ship",
+    "giao",
+    "xin",
+    "để",
+    # change words (spec v2 §4.1): "kia hủy nhé", "kia bớt 1 phần"
+    "hủy",
+    "bớt",
+    "giảm",
+    "thêm",
+    "sửa",
+    "đổi",
+    "chốt",
+)
 # "kia" after these is "that one" / "over there", never a day: "cái kia", "bên kia", "phần kia"
 NOT_DAY_BEFORE_KIA = _forms(
     "cái",

@@ -164,7 +164,7 @@ class FakeLlm:
     def __init__(self, answer):
         self.answer, self.calls = answer, 0
 
-    def classify(self, text, created):
+    def classify(self, text, created, day=None):
         self.calls += 1
         return self.answer
 
@@ -222,3 +222,21 @@ def test_beyond_horizon_AC21():
 def test_backfilled_message_keeps_its_own_day_AC15():
     e, _ = extract("mai 2 phần", Answer(True, {"qty": 2}), datetime(2026, 11, 20, 20, tzinfo=VN_TZ))
     assert isinstance(e, OrderExtracted) and e.order.date == "2026-11-21"
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("kia hủy nhé", "2026-11-25"),  # AZ-10
+        ("kia huy nhe", "2026-11-25"),
+        ("kia bớt 1 phần", "2026-11-25"),
+        ("kia thêm 1 suất", "2026-11-25"),
+        ("kia sửa lại 3 phần", "2026-11-25"),
+        ("hủy đơn mai nhé", "2026-11-24"),
+        ("bớt 1 phần", None),  # no day word: the created date (spec v2 Z5)
+        ("hôm qua hủy rồi", "past day"),
+        ("bớt 1 phần mai, kia thêm 2", "several dates"),
+    ],
+)
+def test_change_words_spec_v2(text, expected):
+    assert r(text) == expected

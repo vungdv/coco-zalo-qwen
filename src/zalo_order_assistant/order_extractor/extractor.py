@@ -12,9 +12,19 @@ from concurrent.futures import Executor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from zalo_order_assistant.events import VN_TZ, ExtractFailed, FailureKind, Message, NotAnOrder, Order, OrderExtracted
+from zalo_order_assistant.events import (
+    VN_TZ,
+    ExtractFailed,
+    FailureKind,
+    Message,
+    NotAnOrder,
+    Op,
+    Order,
+    OrderExtracted,
+)
 from zalo_order_assistant.order_extractor.day_words import resolve
 from zalo_order_assistant.order_extractor.llm import IGNORE_REASONS, Llm, LlmInvalid, LlmTimeout, LlmUnavailable
+from zalo_order_assistant.order_extractor.op_words import check_op
 from zalo_order_assistant.order_extractor.validate import Rejected, parse_model_date, validate
 from zalo_order_assistant.ports import Mediator
 
@@ -79,7 +89,7 @@ class OrderExtractor:
         if day.reason:  # past day, invalid date, several days, beyond the horizon: no need to ask the model
             return NotAnOrder(key, day.reason)
         try:
-            answer = self._llm.classify(message.text, created)
+            answer = self._llm.classify(message.text, created, day.date)
         except LlmUnavailable as e:
             log.warning("extract_failed key=%s kind=SYSTEMIC reason=%s", key, e)
             return ExtractFailed(key, FailureKind.SYSTEMIC, str(e))
@@ -92,15 +102,22 @@ class OrderExtractor:
         if not answer.is_order:
             reason = answer.args.get("reason")
             return NotAnOrder(key, f"model: {reason if reason in IGNORE_REASONS else 'other'}")
-        v = validate(answer.args)
+        model_op = Op(answer.args.get("op") or Op.ADD)  # parse_answer already rejected an unknown op
+        checked = check_op(model_op, message.text)  # spec v2 Z11: a change must be said in words
+        if not isinstance(checked, Op):  # a reason (Op is a StrEnum, so test for Op)
+            return NotAnOrder(key, checked)
+        if checked is not model_op:
+            log.info("op_corrected key=%s model=%s resolved=%s", key, model_op.value, checked.value)
+        v = validate({**answer.args, "op": checked.value})
         if isinstance(v, Rejected):
             return NotAnOrder(key, v.reason)
+        op = v.op
         when = day.date or created  # FR-6b: no day word -> the created date
         model_day = parse_model_date(answer.args.get("date"))
         if model_day is not None and model_day != when:  # the model invented or miscounted a day: resolver wins
             model_text = model_day.isoformat() if isinstance(model_day, date) else model_day
             log.info("date_corrected key=%s model=%s resolved=%s", key, model_text, when.isoformat())
-        log.info("order_extracted key=%s qty=%d date=%s", key, v.qty, when.isoformat())
+        log.info("order_extracted key=%s op=%s qty=%s date=%s", key, op.value, v.qty, when.isoformat())
         return OrderExtracted(
             Order(
                 key,
@@ -110,6 +127,7 @@ class OrderExtractor:
                 message.text[:MESSAGE_MAX_CHARS],
                 sent_at,
                 customer_id=message.sender_id,
+                op=op,
             )
         )
 

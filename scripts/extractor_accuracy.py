@@ -55,12 +55,13 @@ def run_case(extractor, case: dict) -> dict:
         "seconds": round(time.monotonic() - t0, 2),
     }
     if isinstance(e, ExtractFailed):
-        row.update(got=f"FAILED {e.kind}: {e.reason}", ok_class=False, ok_qty=False, ok_date=False)
+        row.update(got=f"FAILED {e.kind}: {e.reason}", ok_class=False, ok_op=False, ok_qty=False, ok_date=False)
     elif got_order:
         o = e.order
         row.update(
-            got=f"order qty={o.qty} date={o.date}",
+            got=f"{o.op.value} qty={o.qty} date={o.date}",
             ok_class=exp["order"],
+            ok_op=exp["order"] and o.op.value == exp.get("op", "add"),
             ok_qty=exp["order"] and o.qty == exp["qty"],
             ok_date=exp["order"] and (exp["date"] is None or o.date == exp["date"]),
         )
@@ -68,10 +69,11 @@ def run_case(extractor, case: dict) -> dict:
         row.update(
             got=f"not an order ({e.reason})",
             ok_class=not exp["order"],
+            ok_op=not exp["order"],
             ok_qty=not exp["order"],
             ok_date=not exp["order"],
         )
-    row["ok"] = row["ok_class"] and row["ok_qty"] and row["ok_date"]
+    row["ok"] = row["ok_class"] and row["ok_op"] and row["ok_qty"] and row["ok_date"]
     return row
 
 
@@ -83,6 +85,8 @@ def evaluate(config: ExtractorConfig | None = None) -> list[dict]:
 
 def summary(rows: list[dict]) -> dict:
     orders = [r for r in rows if r["expect"]["order"]]
+    adds = [r for r in orders if r["expect"].get("op", "add") == "add"]
+    changes = [r for r in orders if r["expect"].get("op", "add") != "add"]
     non = [r for r in rows if not r["expect"]["order"]]
 
     def pct(xs: list[bool]) -> str:
@@ -93,6 +97,9 @@ def summary(rows: list[dict]) -> dict:
         "order vs not-an-order": pct([r["ok_class"] for r in rows]),
         "orders detected (recall)": pct([r["ok_class"] for r in orders]),
         "non-orders ignored": pct([r["ok_class"] for r in non]),
+        "op correct on new orders (add)": pct([r["ok_op"] for r in adds]),
+        "op correct on changes (reduce/set/cancel)": pct([r["ok_op"] for r in changes]),
+        "add fully correct": pct([r["ok"] for r in adds]),
         "qty correct on orders": pct([r["ok_qty"] for r in orders]),
         "date correct on orders": pct([r["ok_date"] for r in orders]),
     }
@@ -120,7 +127,11 @@ def report(rows: list[dict], model: str, label: str) -> str:
     for r in rows:
         if not r["ok"]:
             exp = r["expect"]
-            want = f"order qty={exp['qty']} date={exp['date'] or 'any'}" if exp["order"] else f"no order ({exp['why']})"
+            want = (
+                f"{exp.get('op', 'add')} qty={exp['qty']} date={exp['date'] or 'any'}"
+                if exp["order"]
+                else f"no order ({exp['why']})"
+            )
             text = r["text"].replace("|", "\\|")
             lines.append(f"| {r['id']} | {r['created']} | {text} | {want} | {r['got']} |")
     if all(r["ok"] for r in rows):
