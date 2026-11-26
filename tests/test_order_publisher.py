@@ -6,13 +6,12 @@ import json
 import logging
 import threading
 from concurrent.futures import Executor, Future
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from datetime import datetime
-
-from zalo_order_assistant.events import VN_TZ, FailureKind, Order, OrderPublished, PublishFailed
+from zalo_order_assistant.events import VN_TZ, FailureKind, Op, Order, OrderNotApplied, OrderPublished, PublishFailed
 from zalo_order_assistant.order_publisher import PublisherConfig, SupabaseOrderPublisher, build_payload
 
 TEXT = "Mai đặt 2 phần, ship nhé"
@@ -24,6 +23,7 @@ API_KEY = "sk-test-SECRET"
 class MockSupabase:
     def __init__(self) -> None:
         self.status = 201
+        self.body = b"{}"
         self.requests: list[tuple[str, dict, dict]] = []
         mock = self
 
@@ -37,7 +37,7 @@ class MockSupabase:
                 self.send_response(mock.status)
                 self.send_header("content-type", "application/json")
                 self.end_headers()
-                self.wfile.write(b"{}")
+                self.wfile.write(mock.body)
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -68,7 +68,7 @@ def _server():
 
 @pytest.fixture
 def sb(_server):
-    _server.status, _server.requests = 201, []
+    _server.status, _server.body, _server.requests = 201, b"{}", []
     return _server
 
 
@@ -81,6 +81,7 @@ def test_payload_maps_fields_and_never_sends_delivered():
     assert build_payload(ORDER) == {
         "source": "zalo",
         "external_id": "g123/1732330800000_42",
+        "op": "add",
         "customer_name": "Mai",
         "quantity": 2,
         "delivery_date": "2026-11-24",
@@ -127,7 +128,7 @@ def test_success(sb, status):
         (400, FailureKind.PERMANENT),
         (405, FailureKind.PERMANENT),
         (422, FailureKind.PERMANENT),
-        (409, FailureKind.PERMANENT),
+        (409, FailureKind.PERMANENT),  # a 409 with no known error code
     ],
 )
 def test_failure_kinds(sb, status, kind):
@@ -186,3 +187,54 @@ def test_payload_sends_customer_id_namespaced_by_source():
 
     assert build_payload(replace(ORDER, customer_id="123456789"))["customer_id"] == "zalo:123456789"
     assert "customer_id" not in build_payload(ORDER)
+
+
+@pytest.mark.parametrize("op,qty", [(Op.ADD, 2), (Op.REDUCE, 1), (Op.SET, 3)])
+def test_payload_sends_the_op_and_its_quantity(op, qty):
+    from dataclasses import replace
+
+    p = build_payload(replace(ORDER, op=op, qty=qty))
+    assert (p["op"], p["quantity"], p["customer_name"]) == (op.value, qty, "Mai")
+
+
+def test_cancel_sends_no_quantity():
+    from dataclasses import replace
+
+    p = build_payload(replace(ORDER, op=Op.CANCEL, qty=None))
+    assert p["op"] == "cancel" and "quantity" not in p and p["customer_name"] == "Mai"
+
+
+def problem(error: str) -> bytes:
+    return json.dumps({"type": "about:blank", "title": "Conflict", "status": 409, "error": error}).encode()
+
+
+def test_no_open_order_is_not_applied_and_not_a_failure(sb):
+    from dataclasses import replace
+
+    sb.status, sb.body = 409, problem("no_open_order")
+    rec = Recorder()
+    publisher(sb.url, rec).publish(replace(ORDER, op=Op.REDUCE, qty=1))
+    assert rec.events == [OrderNotApplied(ORDER.key, "no_open_order")]
+
+
+def test_idempotency_conflict_is_permanent_with_its_code(sb):
+    sb.status, sb.body = 409, problem("idempotency_conflict")
+    e = publisher(sb.url).publish_now(ORDER)
+    assert e == PublishFailed(ORDER.key, FailureKind.PERMANENT, 409, "idempotency_conflict")
+
+
+@pytest.mark.parametrize("body", [b"not json", b"[1]", problem("something we do not know: Mai 0901")])
+def test_unreadable_or_unknown_409_is_a_permanent_conflict_and_never_echoes_the_body(sb, body):
+    sb.status, sb.body = 409, body
+    e = publisher(sb.url).publish_now(ORDER)
+    assert e == PublishFailed(ORDER.key, FailureKind.PERMANENT, 409, "conflict")
+
+
+def test_not_applied_log_names_op_and_date_but_not_the_text(sb, caplog):
+    from dataclasses import replace
+
+    sb.status, sb.body = 409, problem("no_open_order")
+    with caplog.at_level(logging.INFO):
+        publisher(sb.url).publish_now(replace(ORDER, op=Op.CANCEL, qty=None))
+    out = " ".join(r.getMessage() for r in caplog.records)
+    assert "op=cancel" in out and "date=2026-11-24" in out and TEXT not in out and API_KEY not in out
