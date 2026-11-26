@@ -26,6 +26,18 @@ from zalo_order_assistant.zalo_reader.store import AckedStore
 pytestmark = pytest.mark.e2e
 
 API_KEY = "sk-e2e-test-key"
+# (customer, delivery_date) -> order totals, from tests/fixtures/e2e_chat.jsonl
+EXPECTED_TOTALS = {
+    ("Hà", "2026-11-21"): [2],
+    ("Mai", "2026-11-24"): [2],
+    ("Mai", "2026-11-23"): [4],  # "đặt cơm" (1) and "đặt thêm 3 phần nữa nhé" (3) merge into one order (AC-6)
+    ("Hùng", "2026-11-24"): [2],
+    ("Lan", "2026-11-27"): [1],
+    ("Tú", "2026-11-28"): [2],
+    ("Ngọc", "2026-11-24"): [0],  # add 3, cancel: listed as cancelled (AZ-2)
+    ("Phúc", "2026-11-23"): [2],  # add 2, set 3, reduce 1 (AZ-3)
+    ("Vy", "2026-11-25"): [0],  # "kia 2 phần", "kia hủy nhé" (AZ-10)
+}
 REAL_URL = os.environ.get("E2E_SUPABASE_URL")
 REAL_KEY = os.environ.get("E2E_SUPABASE_API_KEY")
 
@@ -104,22 +116,31 @@ class Run:
         return {m.key: e["audit"] for m, e in self.chat if "audit" in e}
 
     def check_final(self, supabase) -> None:
-        # one row per order message, created once (201) and only ever updated after (200): no duplicates
-        assert set(self.recorder.statuses) == set(self.orders())
+        not_applied = {k for k, status in self.audited().items() if status == "not_applied"}
+        # one line per order message, stored once (201) and only ever replayed after (200): no duplicates.
+        # A change with nothing open to change is posted and answered 409 no_open_order, never stored.
+        assert set(self.recorder.statuses) == set(self.orders()) | not_applied
         for key, statuses in self.recorder.statuses.items():
             stored = [s for s in statuses if s != 401]  # 401s are the revoked-key attempts
-            assert stored[0] == 201 and all(s == 200 for s in stored[1:]), (key, statuses)
+            if key in not_applied:
+                assert set(stored) == {409}, (key, statuses)
+            else:
+                assert stored[0] == 201 and all(s == 200 for s in stored[1:]), (key, statuses)
         if supabase is not None:
-            rows = {ext: r for (_src, ext), r in supabase.rows.items()}
-            assert set(rows) == set(self.orders())
+            lines = {ext: line for (_src, ext), line in supabase.lines.items()}
+            assert set(lines) == set(self.orders())
             for key, want in self.orders().items():
-                r = rows[key]
-                assert (r["customer_name"], r["quantity"], r["delivery_date"]) == (
+                line = lines[key]
+                order = supabase.orders[line["order"]]
+                assert (order["customer_name"], line["op"], line["requested_quantity"], order["delivery_date"]) == (
                     want["who"],
+                    want.get("op", "add"),
                     want["qty"],
                     want["date"],
-                )
-                assert r["message"] == next(m.text for m, _ in self.chat if m.key == key)
+                ), key
+                assert line["message"] == next(m.text for m, _ in self.chat if m.key == key)
+            # what the kitchen sees: one order per customer and day, with its running total (spec v2 §6)
+            assert supabase.totals() == EXPECTED_TOTALS
         # every message that made no order is in the audit log, without its text
         from zalo_order_assistant.audit_log import SqliteAuditLog
 
@@ -141,7 +162,7 @@ def run(tmp_path, supabase, caplog):
     return Run(tmp_path, supabase, caplog)
 
 
-def test_one_order_per_order_message_none_for_chat_AC1_to_AC23(run, supabase):
+def test_one_line_per_order_message_none_for_chat_AC1_to_AC23_AZ2_to_AZ10(run, supabase):
     app, reader = run.app()
     t = run.start(app)
     assert reader.wait_acked(len(run.chat), 300), f"acked {len(reader.acked)} of {len(run.chat)}"

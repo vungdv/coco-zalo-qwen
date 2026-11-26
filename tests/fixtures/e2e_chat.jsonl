@@ -12,3 +12,12 @@
 {"key": "g5/11", "sender": "Tú", "is_self": false, "text": "28/11 đặt 2 phần", "sent_at": "2026-11-23T09:10:00+07:00", "expect": {"order": {"who": "Tú", "qty": 2, "date": "2026-11-28"}}}
 {"key": "g5/12", "sender": "Mai", "is_self": false, "text": "đặt thêm 3 phần nữa nhé", "sent_at": "2026-11-23T09:11:00+07:00", "expect": {"order": {"who": "Mai", "qty": 3, "date": "2026-11-23"}}}
 {"key": "g5/13", "sender": "Tú", "is_self": false, "text": "31/11 2 phần", "sent_at": "2026-11-23T09:12:00+07:00", "expect": {"audit": "not_an_order"}}
+{"key": "g5/14", "sender": "Ngọc", "is_self": false, "text": "mai 3 phần", "sent_at": "2026-11-23T09:13:00+07:00", "expect": {"order": {"who": "Ngọc", "op": "add", "qty": 3, "date": "2026-11-24"}}}
+{"key": "g5/15", "sender": "Ngọc", "is_self": false, "text": "e hủy đơn mai nhé", "sent_at": "2026-11-23T09:14:00+07:00", "expect": {"order": {"who": "Ngọc", "op": "cancel", "qty": null, "date": "2026-11-24"}}}
+{"key": "g5/16", "sender": "Phúc", "is_self": false, "text": "hôm nay cho mình 2 phần", "sent_at": "2026-11-23T09:15:00+07:00", "expect": {"order": {"who": "Phúc", "op": "add", "qty": 2, "date": "2026-11-23"}}}
+{"key": "g5/17", "sender": "Phúc", "is_self": false, "text": "sửa lại 3 phần nhé", "sent_at": "2026-11-23T09:16:00+07:00", "expect": {"order": {"who": "Phúc", "op": "set", "qty": 3, "date": "2026-11-23"}}}
+{"key": "g5/18", "sender": "Phúc", "is_self": false, "text": "bớt 1 phần", "sent_at": "2026-11-23T09:17:00+07:00", "expect": {"order": {"who": "Phúc", "op": "reduce", "qty": 1, "date": "2026-11-23"}}}
+{"key": "g5/19", "sender": "Quân", "is_self": false, "text": "bớt 1 phần nhé", "sent_at": "2026-11-23T09:18:00+07:00", "expect": {"audit": "not_applied"}}
+{"key": "g5/20", "sender": "Vy", "is_self": false, "text": "bớt đi nhé", "sent_at": "2026-11-23T09:19:00+07:00", "expect": {"audit": "not_an_order"}}
+{"key": "g5/21", "sender": "Vy", "is_self": false, "text": "kia 2 phần", "sent_at": "2026-11-23T09:20:00+07:00", "expect": {"order": {"who": "Vy", "op": "add", "qty": 2, "date": "2026-11-25"}}}
+{"key": "g5/22", "sender": "Vy", "is_self": false, "text": "kia hủy nhé", "sent_at": "2026-11-23T09:21:00+07:00", "expect": {"order": {"who": "Vy", "op": "cancel", "qty": null, "date": "2026-11-25"}}}
