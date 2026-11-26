@@ -45,6 +45,7 @@ class Message:
     is_self: bool
     text: str = field(repr=False)  # never logged (NFR-3)
     sent_at: datetime  # tz-aware, Asia/Ho_Chi_Minh, always known (FR-6a)
+    sender_id: str = ""  # Zalo user id of the sender: stable when the display name changes; "" when unknown or own
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class Order:
     date: str  # YYYY-MM-DD
     message: str = field(repr=False)
     placed_at: datetime  # when the customer sent the message (Message.sent_at), tz-aware
+    customer_id: str = ""  # Message.sender_id; "" when unknown
 
 
 # --- Reader -> Coordinator ------------------------------------------------------------------------------------------

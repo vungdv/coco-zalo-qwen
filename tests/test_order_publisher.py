@@ -179,3 +179,10 @@ def test_config_from_env():
         PublisherConfig.from_env({"SUPABASE_URL": "http://sb"})
     c = PublisherConfig.from_env({"SUPABASE_URL": "http://sb/", "SUPABASE_API_KEY": "k"})
     assert c.supabase_url == "http://sb" and c.api_key == "k"
+
+
+def test_payload_sends_customer_id_namespaced_by_source():
+    from dataclasses import replace
+
+    assert build_payload(replace(ORDER, customer_id="123456789"))["customer_id"] == "zalo:123456789"
+    assert "customer_id" not in build_payload(ORDER)

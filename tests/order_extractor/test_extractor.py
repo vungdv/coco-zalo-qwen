@@ -236,8 +236,10 @@ class Recorder:
         self.events.append(e)
 
 
-def message(text="mai lấy 2 phần", sent_at=datetime(2026, 11, 23, 9, 30, tzinfo=VN_TZ), sender="Mai") -> Message:
-    return Message("g1/1", "Bếp", sender, False, text, sent_at)
+def message(
+    text="mai lấy 2 phần", sent_at=datetime(2026, 11, 23, 9, 30, tzinfo=VN_TZ), sender="Mai", sender_id=""
+) -> Message:
+    return Message("g1/1", "Bếp", sender, False, text, sent_at, sender_id)
 
 
 def run(out, **kw):
@@ -248,6 +250,11 @@ def test_order_AC1():
     e = run(Answer(True, {"qty": 2}), text="Mai đặt 2 phần, ship nhé")
     assert isinstance(e, OrderExtracted)
     assert (e.order.key, e.order.who, e.order.qty, e.order.message) == ("g1/1", "Mai", 2, "Mai đặt 2 phần, ship nhé")
+
+
+def test_order_carries_the_sender_id_as_customer_id():
+    e = run(Answer(True, {"qty": 1}), sender_id="123456789")
+    assert isinstance(e, OrderExtracted) and e.order.customer_id == "123456789"
 
 
 def test_order_is_placed_at_the_message_time_not_the_processing_time():

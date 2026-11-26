@@ -4,7 +4,8 @@ Ported from the zalo-adater spike (`adapter.py`). Changes for the push design:
 - the history of a chat is backfilled once each time the chat is opened, not again on every poll until all of it is
   acked: the Coordinator holds what was emitted, and a restart backfills again;
 - `ack(key)` replaces `mark_published(keys)`;
-- a sender with no display name is "" (FR-4) instead of the numeric uid;
+- a sender with no display name is "" (FR-4) instead of the numeric uid; the uid itself is kept apart as
+  `sender_id`, a stable customer identity that survives a change of display name;
 - a bubble whose time cannot be read (sent_at_ms 0, or before 2020) is never emitted and so never acked: it is
   logged as time_unknown and read again later (FR-6a, AC-26). If it was only reached by scrolling up, the history
   is read again after `rebackfill_seconds`. It is never given a default time.
@@ -28,6 +29,17 @@ from zalo_order_assistant.zalo_reader.store import AckedStore
 log = logging.getLogger(__name__)
 
 EARLIEST_MS = 1_577_811_600_000  # 2020-01-01 00:00 +07:00: anything earlier is not a real Zalo message time
+
+
+def _sender_id(raw: ReaderMessage) -> str:
+    """The sender's Zalo user id from the bubble's data-qid, or "" when there is none to trust.
+
+    Own messages get "": an owner typing an order for a customer must not be keyed to the owner's account.
+    """
+    uid = raw.sender_uid.strip()
+    if raw.is_self or uid in ("", "0", "unknown"):  # "unknown" = bubble without a data-qid (reader.js)
+        return ""
+    return uid
 
 
 @dataclass(frozen=True)
@@ -189,6 +201,7 @@ class ZaloWebAdapter:
                     is_self=raw.is_self,
                     text=raw.text,
                     sent_at=datetime.fromtimestamp(raw.sent_at_ms / 1000, VN_TZ),
+                    sender_id=_sender_id(raw),
                 )
             )
         return out

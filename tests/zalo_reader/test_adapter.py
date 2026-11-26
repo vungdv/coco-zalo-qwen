@@ -184,6 +184,17 @@ def test_sender_name_from_another_bubble_of_the_same_uid():
     assert a.poll().messages[0].sender == "Mai"
 
 
+def test_sender_id_is_the_zalo_uid():
+    a, _ = make(page([raw("1_u1", 1000, sender_uid="123456789")]))
+    assert a.poll().messages[0].sender_id == "123456789"
+
+
+@pytest.mark.parametrize("uid,is_self", [("unknown", False), ("0", True), ("123", True)])
+def test_sender_id_is_empty_without_a_trusted_uid(uid, is_self):
+    a, _ = make(page([raw("1_x", 1000, sender_uid=uid, is_self=is_self)]))
+    assert a.poll().messages[0].sender_id == ""
+
+
 def test_own_message_is_marked_is_self():
     a, _ = make(page([raw("1_0", 1000, sender=None, sender_uid="0", is_self=True)]))
     m = a.poll().messages[0]
