@@ -1,0 +1,6 @@
+- generic [active] [ref=e1]:
+  - textbox [ref=e3]
+  - generic [ref=e4]:
+    - generic [ref=e8]: Bếp Phương Bắc - Đặt cơm
+    - generic [ref=e12]: Gia đình
+    - generic [ref=e16]: Bếp Phương Bắc - Đặt cơm

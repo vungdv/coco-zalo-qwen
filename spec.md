@@ -1,6 +1,8 @@
 # Zalo Order Assistant
 
 ## Status
+> **Amended by [spec v2](spec.v2.md) (order adjustments, 2026-11-26).** Messages can now reduce, set or cancel an order, and each message is one immutable line on the customer's order for the day. FR-2 (cancellations) and AC-6 (a second message) below are changed there.
+
 **Approved.** Spec phase closed on 2026-11-23. Requirements (§1), design (§2) and implementation tasks (§3) are defined and were reviewed against the spike code. Next phase: implementation, starting with T0 to T3 (§3.2). Scenarios and test plan details are placeholders, to be written as part of T7.
 
 Spikes this builds on:
@@ -32,7 +34,7 @@ Customers pre-order food by posting free-text messages in a Zalo group. The shop
 | ID | Pri | Requirement |
 |---|---|---|
 | FR-1 | M | The system shall read new text messages from the configured Zalo group chat. *(done in the spike)* |
-| FR-2 | M | The system shall decide whether a message is a pre-order, meaning a request for food to be prepared. Non-orders shall be ignored. Confirmations, receipts, thanks, questions and reports about an existing order ("đã nhận 2 phần", "nhận rồi", "2 phần ngon quá") are **not** orders, even when they contain a number of portions. *(spike: agent returns `NotAnOrder`)* |
+| FR-2 | M | *(Amended by spec v2: cancellations and changes to an order are now orders, with an `op`.)* The system shall decide whether a message is a pre-order, meaning a request for food to be prepared. Non-orders shall be ignored. Confirmations, receipts, thanks, questions and reports about an existing order ("đã nhận 2 phần", "nhận rồi", "2 phần ngon quá") are **not** orders, even when they contain a number of portions. *(spike: agent returns `NotAnOrder`)* |
 | FR-3 | M | For a pre-order, the system shall store `who`, `qty`, `date` and `message`. |
 | FR-4 | M | `who` shall be the Zalo sender's display name as shown on the message. Messages from the operator's own account (`is_self`) shall be skipped by default (config `INCLUDE_OWN_MESSAGES=false`), so an owner typing on a customer's behalf is not saved as the owner's order. A message with no readable sender name (only a numeric uid) shall not be saved and shall be recorded as skipped (FR-8). |
 | FR-5 | M | `qty` shall be a whole number ≥ 1. When no quantity is stated, it shall default to `1`. |
@@ -41,7 +43,7 @@ Customers pre-order food by posting free-text messages in a Zalo group. The shop
 | FR-6b | M | When the message names no day, `date` shall default to the message created date (this is what the agent does today). |
 | FR-7 | M | Each message shall produce at most one order. The Zalo message key is the idempotency key, so reading or retrying the same message never creates a duplicate. *(done in the spike)* |
 | FR-8 | M | Every message that is read but produces no order (not an order, rejected, permanent failure, skipped sender, retry cap reached) shall be recorded in a local audit log with `key`, `sent_at`, `reason` and `status`. **The message text is never stored there** (NFR-3). The operator can check a missing order against Zalo by hand. |
-| FR-9 | M | Orders shall be saved through the existing Supabase `orders` API: `source=zalo`, `external_id` = Zalo message key, `customer_name`=`who`, `quantity`=`qty`, `delivery_date`=`date`, `message`. *(done in the spike)* An update shall never reset `delivered` (Supabase S18). |
+| FR-9 | M | Orders shall be saved through the existing Supabase `orders` API: `source=zalo`, `external_id` = Zalo message key, `customer_name`=`who`, `customer_id` = `zalo:<sender's Zalo user id>` when known (not for own messages), so a customer who changes their display name keeps one identity, `quantity`=`qty`, `delivery_date`=`date`, `message`, `placed_at` = message created time (`sentAt`, RFC 3339 with `+07:00`) so the web app shows when the customer ordered, not when the order was published. *(done in the spike)* An update shall never reset `delivered` (Supabase S18). |
 | FR-10 | M | The system shall retry when the agent or Supabase is down, without losing or duplicating messages. Failures are of three kinds (§2.5): **systemic** (nothing can work until it is fixed: Ollama down, Supabase unreachable or 401), retried without limit and shown to the operator as a pipeline state; **per-message** (this one input keeps failing: for example an Ollama timeout), retried up to `MAX_ATTEMPTS`; **permanent** (400/405/422, unusable model output), never retried. |
 | FR-11 | M | When a message reaches `MAX_ATTEMPTS` (default 5) per-message failures, the system shall acknowledge it as failed and record it (FR-8), so one bad message cannot block the queue for good. |
 
@@ -87,7 +89,7 @@ Rules:
 | AC-3 | Someone posts "ok nhé" or a sticker | No order. |
 | AC-4 | The same message is read twice (restart or backfill) | Still one order. |
 | AC-5 | Mai posts "hôm qua mình đặt 2 phần" | Not an order. Nothing saved. |
-| AC-6 | Mai posts a second, separate order message | A second order is created (different message key). |
+| AC-6 | Mai posts a second, separate order message *(spec v2: a second line, merged by the backend into the same order for that day)* | A second order is created (different message key). |
 | AC-7 | Supabase is down when an order is extracted | The message is held and retried, then saved once, with no duplicate. |
 | AC-8 | Mai's message created Mon 2026-11-23: "mai lấy 2 phần" | `date=2026-11-24`. |
 | AC-9 | Created Mon 2026-11-23: "ngày kia 3 phần" (or "mốt 3 phần") | `date=2026-11-25`. |
@@ -411,6 +413,38 @@ Suggested first slice: T0, T1, T2, T3. With the Coordinator and Publisher done, 
 | AC-23, AC-24 | T2 (skip and attempt cap) |
 | AC-8 to AC-14, AC-17 to AC-22 | T4a unit tests on the date resolver, T4 fixtures |
 | AC-15, AC-26 | T5c (created date, unknown time) + T4a, T7 |
+
+### Results (T7, 2026-11-23)
+
+Automated: `uv run pytest` (unit), `uv run pytest -m e2e` (replayed chat, real local Qwen, Supabase stand-in with the `orders` contract or a real test project via `E2E_SUPABASE_URL`/`E2E_SUPABASE_API_KEY`), `uv run pytest -m llm` (fixture set), `uv run pytest -m browser` (chat search scripts in a headless browser).
+
+| AC | Status | Test |
+|---|---|---|
+| AC-1 | Pass | `tests/e2e/test_e2e.py::test_one_order_per_order_message_none_for_chat_AC1_to_AC23`, `test_extractor.py::test_order_AC1` |
+| AC-2 | Pass | e2e (g5/2), `test_extractor.py::test_validate` |
+| AC-3 | Pass | e2e (g5/3), fixture set |
+| AC-4 | Pass | `test_e2e.py::test_restart_mid_run_and_replay_again_make_no_duplicates_AC4`, `test_coordinator.py::test_duplicate_key_is_queued_once_AC4`, `test_adapter.py::test_restart_does_not_re_emit_acked_messages` |
+| AC-5 | Pass | e2e (g5/5), `test_day_words.py::test_day_word_rejections_never_reach_the_model` |
+| AC-6 | Pass | e2e (g5/12), `test_coordinator.py::test_second_separate_message_makes_a_second_order_AC6` |
+| AC-7 | Pass | `test_coordinator.py::test_supabase_down_holds_then_saves_once_without_reextracting_AC7`, `test_order_publisher.py::test_failure_kinds` |
+| AC-8 to AC-14, AC-17 to AC-20, AC-22 | Pass | `test_day_words.py::test_resolution`, e2e (g5/4, g5/6, g5/9, g5/13) |
+| AC-15 | Pass | e2e (g5/0, written 2026-11-20), `test_day_words.py::test_backfilled_message_keeps_its_own_day_AC15` |
+| AC-16 | Pass | e2e (g5/10), fixture set |
+| AC-21 | Pass | `test_day_words.py::test_horizon_AC21`, `test_beyond_horizon_AC21` |
+| AC-23 | Pass | e2e (g5/7), `test_coordinator.py::test_own_message_is_skipped_recorded_and_acked_AC23` |
+| AC-24 | Pass | `test_coordinator.py::test_per_message_failure_retries_with_backoff_then_acks_at_cap_AC24` |
+| AC-25 | Pass | `test_e2e.py::test_revoked_key_holds_the_queue_then_recovers_AC25`, `test_coordinator.py::test_revoked_key_shows_unauthorized_acks_nothing_and_recovers_AC25` |
+| AC-26 | Pass | `test_time.py::test_bubble_with_no_time_is_not_emitted_and_not_acked_AC26` |
+
+Manual checks still open (they need the operator's live accounts):
+
+| Check | Task | How |
+|---|---|---|
+| Create, then update without resetting `delivered`, in the real Supabase app | T3 | `uv run python scripts/check_publisher.py` |
+| The configured group opens from a cold start on live Zalo Web; a same-titled private chat is ignored; a wrong title gives `CHAT_NOT_FOUND`; confirm the `search_result_item` selector | T5b | run the assistant with `ZALO_CHAT` set, see README "Verifying the chat search" |
+| E2E against a Supabase test project | T7 | `E2E_SUPABASE_URL=... E2E_SUPABASE_API_KEY=... uv run pytest -m e2e` |
+
+Extractor accuracy on the 69-message fixture set (synthetic, not real chat data): 97% fully correct, dates 98% ([reports/extractor-accuracy.md](reports/extractor-accuracy.md)). The pass mark (risk R2) is still to be set from real chat data.
 
 ## 3.4 Risks
 

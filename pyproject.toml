@@ -1,0 +1,46 @@
+[project]
+name = "zalo-order-assistant"
+version = "0.1.0"
+description = "Turn pre-order messages in a Zalo group chat into orders in the Bếp Phương Bắc Supabase app"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.6", "requests>=2.31", "python-dotenv>=1.0"]
+
+[project.scripts]
+zalo-order-assistant = "zalo_order_assistant.main:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "types-requests>=2.31"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zalo_order_assistant"]
+artifacts = ["src/zalo_order_assistant/zalo_reader/*.js", "src/zalo_order_assistant/zalo_reader/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not e2e and not llm and not browser'"
+markers = [
+    "e2e: end-to-end run with real Qwen and Supabase (or the local fake); run with -m e2e",
+    "llm: needs the local Ollama model; run with -m llm",
+    "browser: runs scripts in a headless playwright-cli browser; run with -m browser",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["zalo_order_assistant"]
+mypy_path = "src"
+check_untyped_defs = true
+warn_unused_ignores = true

@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Zalo - fixture</title></head>
+<body>
+<!-- Shape of Zalo Web's conversation list as probed read-only on 2026-11-23 (names are made up). -->
+<div id="contact-search"><input id="contact-search-input" type="text"></div>
+<div id="conversationList">
+  <div class="msg-item" anim-data-id="1234567890123456789">
+    <div class="conv-item"><div class="conv-item-title__name truncate"><div class="truncate">Bếp Phương Bắc - Đặt cơm</div></div></div>
+  </div>
+  <div class="msg-item" anim-data-id="g1111111111111111111">
+    <div class="conv-item"><div class="conv-item-title__name truncate"><i class="fa fa-Community_16_Filled community__conv-indicator"></i><div class="truncate">Gia đình</div></div></div>
+  </div>
+  <div class="msg-item" anim-data-id="g2222222222222222222">
+    <div class="conv-item"><div class="conv-item-title__name truncate"><i class="fa fa-Community_16_Filled community__conv-indicator"></i><div class="truncate">Bếp Phương Bắc - Đặt cơm</div></div></div>
+  </div>
+</div>
+<div id="clicked"></div>
+<script>
+  document.querySelectorAll('#conversationList .msg-item').forEach(e =>
+    e.addEventListener('click', () => { document.getElementById('clicked').textContent = e.getAttribute('anim-data-id'); }));
+</script>
+</body></html>
