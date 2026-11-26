@@ -175,5 +175,5 @@ All of U0–U6 is implemented.
 | Unit tests (`uv run pytest`) | 369 passed. Coverage includes every row of §5 and §4.4, AZ-5, AZ-6, AZ-7, AZ-10, AZ-11, AZ-12 and Z11. |
 | E2E (`uv run pytest -m e2e`, replayed chat, real local Qwen, ledger stand-in) | 3 passed. The chat gained AZ-2, AZ-3, AZ-6, AZ-7 and AZ-10, and the kitchen totals per customer and day are asserted. |
 | Fixture set (`uv run pytest -m llm`, 101 messages, 21 of them changes) | [reports/extractor-accuracy-v2.md](reports/extractor-accuracy-v2.md): 99% fully correct, all 20 expected changes have the right op, all 30 non-orders are ignored. The one miss (#11 "cho mình 2 phần cái kia") also failed on v1 (97%), so v1 add accuracy did not drop. |
-| `scripts/check_publisher.py` | Dry run against the ledger stand-in: 3, 2, 4, 0, replay 200, then not applied. **Still to run against the real app** (it writes a test order). |
+| `scripts/check_publisher.py` against the live app (2026-11-26) | Pass. add 3 → 201, total 3; reduce 1 → 201, total 2; set 4 → 201, total 4; cancel → 201, total 0; replay → 200; reduce with nothing open → 409 `no_open_order` → `OrderNotApplied`. |
 | Not done | AZ-1 and AZ-8 wait for B1. AZ-13 (two "Lan"s) is covered only by the backend's identity rule, with no test here. |
