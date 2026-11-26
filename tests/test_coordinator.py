@@ -17,8 +17,10 @@ from zalo_order_assistant.events import (
     Message,
     MessageReceived,
     NotAnOrder,
+    Op,
     Order,
     OrderExtracted,
+    OrderNotApplied,
     OrderPublished,
     PipelineState,
     PublishFailed,
@@ -35,8 +37,8 @@ def msg(key: str, sender: str = "Mai", is_self: bool = False, text: str = SECRET
     return Message(key, "Bếp", sender, is_self, text, SENT)
 
 
-def order(key: str) -> Order:
-    return Order(key, "Mai", 2, "2026-11-24", SECRET_TEXT, SENT)
+def order(key: str, op: Op = Op.ADD) -> Order:
+    return Order(key, "Mai", None if op is Op.CANCEL else 2, "2026-11-24", SECRET_TEXT, SENT, op=op)
 
 
 class FakeSource:
@@ -68,6 +70,8 @@ class FakeExtractor:
         out = outcomes.pop(0) if outcomes else "order"
         if out == "order":
             self.coord.notify(OrderExtracted(order(m.key)))
+        elif isinstance(out, Op):
+            self.coord.notify(OrderExtracted(order(m.key, out)))
         elif out == "none":
             self.coord.notify(NotAnOrder(m.key, "receipt"))
         elif isinstance(out, FailureKind):
@@ -80,16 +84,22 @@ class FakePublisher:
         self.coord = coord
         self.script: dict[str, list[object]] = {}
         self.calls: list[str] = []
+        self.ops: list[Op] = []
         self.default: object = 201
 
     def publish(self, o: Order) -> None:
         self.calls.append(o.key)
+        self.ops.append(o.op)
         outcomes = self.script.get(o.key)
         out = outcomes.pop(0) if outcomes else self.default
         if out in (200, 201):
             self.coord.notify(OrderPublished(o.key))
         elif out is None:
             self.coord.notify(PublishFailed(o.key, FailureKind.SYSTEMIC, None, "ConnectionError"))
+        elif out == "not_applied":
+            self.coord.notify(OrderNotApplied(o.key, "no_open_order"))
+        elif out == "conflict":
+            self.coord.notify(PublishFailed(o.key, FailureKind.PERMANENT, 409, "idempotency_conflict"))
         else:
             assert isinstance(out, int)
             kind = FailureKind.PERMANENT if out in (400, 405, 422) else FailureKind.SYSTEMIC
@@ -198,6 +208,34 @@ def test_permanent_publish_failure_is_recorded_and_acked(rig, status):
     rig.receive(msg("a"))
     assert rig.source.acked == ["a"] and rig.audit_rows == [("a", f"publisher {status}", "failed")]
     assert rig.coord.pipeline_state is PipelineState.OK
+
+
+def test_change_with_no_open_order_is_recorded_not_applied_and_acked_AZ5_AZ6(rig, caplog):
+    rig.ext.script["a"] = [Op.SET]
+    rig.pub.script["a"] = ["not_applied"]
+    with caplog.at_level(logging.WARNING):
+        rig.receive(msg("a"), msg("b"))
+    assert rig.pub.calls == ["a", "b"] and rig.source.acked == ["a", "b"]  # never retried, the queue moves on
+    assert rig.audit_rows == [("a", "no_open_order", "not_applied")]
+    assert rig.coord.pipeline_state is PipelineState.OK and rig.sched.timers == []
+    line = next(r.getMessage() for r in caplog.records if "order_not_applied" in r.getMessage())
+    assert "op=set" in line and "date=2026-11-24" in line and SECRET_TEXT not in line
+
+
+def test_idempotency_conflict_is_a_permanent_failure_AZ11(rig):
+    rig.pub.script["a"] = ["conflict"]
+    rig.receive(msg("a"))
+    assert rig.source.acked == ["a"] and rig.audit_rows == [("a", "publisher 409: idempotency_conflict", "failed")]
+
+
+def test_change_waits_behind_a_held_add_and_lands_after_it_AZ12(rig):
+    rig.ext.script["b"] = [Op.REDUCE]
+    rig.pub.script["a"] = [503, 201]
+    rig.receive(msg("a"), msg("b"))
+    assert rig.pub.calls == ["a"] and rig.source.acked == []  # Supabase down: the reduce is held too
+    rig.fire()
+    assert rig.pub.calls == ["a", "a", "b"] and rig.pub.ops[-1] is Op.REDUCE
+    assert rig.source.acked == ["a", "b"]
 
 
 def test_per_message_failure_retries_with_backoff_then_acks_at_cap_AC24(rig):

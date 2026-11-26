@@ -28,6 +28,7 @@ from zalo_order_assistant.events import (
     NotAnOrder,
     Order,
     OrderExtracted,
+    OrderNotApplied,
     OrderPublished,
     PipelineState,
     PublishFailed,
@@ -65,6 +66,7 @@ SKIPPED = "skipped"
 NOT_AN_ORDER = "not_an_order"
 FAILED = "failed"
 RETRY_CAP = "retry_cap"
+NOT_APPLIED = "not_applied"  # a reduce/set/cancel the backend could not apply: no open order (spec v2 Z8)
 
 
 class Coordinator:
@@ -186,6 +188,18 @@ class Coordinator:
                     self._complete()
             case OrderPublished(key=k):
                 if self._is_current(k, event):
+                    self._complete()
+            case OrderNotApplied(key=k, reason=r):
+                if self._is_current(k, event):
+                    held = self._order
+                    log.warning(
+                        "order_not_applied key=%s op=%s date=%s reason=%s",
+                        k,
+                        held.op.value if held else "?",
+                        held.date if held else "?",
+                        r,
+                    )
+                    self._record(r, NOT_APPLIED)
                     self._complete()
             case ExtractFailed(key=k, kind=kind, reason=r):
                 if self._is_current(k, event):
