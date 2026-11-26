@@ -28,6 +28,15 @@ class ReaderStatus(StrEnum):
     BROWSER_FAILED = "BROWSER_FAILED"
 
 
+class Op(StrEnum):
+    """What a message does to the customer's order for that day (spec v2 §2, backend spec v2 §2)."""
+
+    ADD = "add"  # a new order, or more portions
+    REDUCE = "reduce"  # fewer portions by qty
+    SET = "set"  # the total becomes qty
+    CANCEL = "cancel"  # the whole order is off (no qty)
+
+
 class PipelineState(StrEnum):
     OK = "OK"
     PUBLISHER_UNAUTHORIZED = "PUBLISHER_UNAUTHORIZED"
@@ -50,13 +59,16 @@ class Message:
 
 @dataclass(frozen=True)
 class Order:
+    """One line on a customer's order: the change one message asks for (spec v2 Z1)."""
+
     key: str
     who: str
-    qty: int
+    qty: int | None  # portions for add/reduce/set; None for cancel
     date: str  # YYYY-MM-DD
     message: str = field(repr=False)
     placed_at: datetime  # when the customer sent the message (Message.sent_at), tz-aware
     customer_id: str = ""  # Message.sender_id; "" when unknown
+    op: Op = Op.ADD
 
 
 # --- Reader -> Coordinator ------------------------------------------------------------------------------------------
@@ -110,6 +122,14 @@ class PublishFailed:
     reason: str = ""
 
 
+@dataclass(frozen=True)
+class OrderNotApplied:
+    """The backend stored nothing: there was no open order to reduce, set or cancel (spec v2 Z8)."""
+
+    key: str
+    reason: str
+
+
 # --- Coordinator internal -------------------------------------------------------------------------------------------
 
 
@@ -125,6 +145,7 @@ Event = (
     | NotAnOrder
     | ExtractFailed
     | OrderPublished
+    | OrderNotApplied
     | PublishFailed
     | RetryDue
 )

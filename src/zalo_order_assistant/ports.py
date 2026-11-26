@@ -29,7 +29,7 @@ class Extractor(Protocol):  # OrderExtractor
 
 
 class Publisher(Protocol):  # OrderPublisher
-    def publish(self, order: Order) -> None: ...  # -> OrderPublished | PublishFailed
+    def publish(self, order: Order) -> None: ...  # -> OrderPublished | OrderNotApplied | PublishFailed
 
 
 class AuditLog(Protocol):
