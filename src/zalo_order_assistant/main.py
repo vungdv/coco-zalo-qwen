@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TextIO
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from zalo_order_assistant.audit_log import SqliteAuditLog
 from zalo_order_assistant.coordinator import Coordinator
@@ -165,7 +165,7 @@ def build(
 
 
 def main() -> None:
-    load_dotenv()
+    load_dotenv(find_dotenv(usecwd=True))  # .env of the working directory, like the ./data paths
     try:
         config = Config.from_env()
     except ValueError as exc:
