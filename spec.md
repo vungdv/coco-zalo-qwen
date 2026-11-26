@@ -1,6 +1,8 @@
 # Zalo Order Assistant
 
 ## Status
+> **Amended by [spec v2](spec.v2.md) (order adjustments, 2026-11-26).** Messages can now reduce, set or cancel an order, and each message is one immutable line on the customer's order for the day. FR-2 (cancellations) and AC-6 (a second message) below are changed there.
+
 **Approved.** Spec phase closed on 2026-11-23. Requirements (§1), design (§2) and implementation tasks (§3) are defined and were reviewed against the spike code. Next phase: implementation, starting with T0 to T3 (§3.2). Scenarios and test plan details are placeholders, to be written as part of T7.
 
 Spikes this builds on:
@@ -32,7 +34,7 @@ Customers pre-order food by posting free-text messages in a Zalo group. The shop
 | ID | Pri | Requirement |
 |---|---|---|
 | FR-1 | M | The system shall read new text messages from the configured Zalo group chat. *(done in the spike)* |
-| FR-2 | M | The system shall decide whether a message is a pre-order, meaning a request for food to be prepared. Non-orders shall be ignored. Confirmations, receipts, thanks, questions and reports about an existing order ("đã nhận 2 phần", "nhận rồi", "2 phần ngon quá") are **not** orders, even when they contain a number of portions. *(spike: agent returns `NotAnOrder`)* |
+| FR-2 | M | *(Amended by spec v2: cancellations and changes to an order are now orders, with an `op`.)* The system shall decide whether a message is a pre-order, meaning a request for food to be prepared. Non-orders shall be ignored. Confirmations, receipts, thanks, questions and reports about an existing order ("đã nhận 2 phần", "nhận rồi", "2 phần ngon quá") are **not** orders, even when they contain a number of portions. *(spike: agent returns `NotAnOrder`)* |
 | FR-3 | M | For a pre-order, the system shall store `who`, `qty`, `date` and `message`. |
 | FR-4 | M | `who` shall be the Zalo sender's display name as shown on the message. Messages from the operator's own account (`is_self`) shall be skipped by default (config `INCLUDE_OWN_MESSAGES=false`), so an owner typing on a customer's behalf is not saved as the owner's order. A message with no readable sender name (only a numeric uid) shall not be saved and shall be recorded as skipped (FR-8). |
 | FR-5 | M | `qty` shall be a whole number ≥ 1. When no quantity is stated, it shall default to `1`. |
@@ -87,7 +89,7 @@ Rules:
 | AC-3 | Someone posts "ok nhé" or a sticker | No order. |
 | AC-4 | The same message is read twice (restart or backfill) | Still one order. |
 | AC-5 | Mai posts "hôm qua mình đặt 2 phần" | Not an order. Nothing saved. |
-| AC-6 | Mai posts a second, separate order message | A second order is created (different message key). |
+| AC-6 | Mai posts a second, separate order message *(spec v2: a second line, merged by the backend into the same order for that day)* | A second order is created (different message key). |
 | AC-7 | Supabase is down when an order is extracted | The message is held and retried, then saved once, with no duplicate. |
 | AC-8 | Mai's message created Mon 2026-11-23: "mai lấy 2 phần" | `date=2026-11-24`. |
 | AC-9 | Created Mon 2026-11-23: "ngày kia 3 phần" (or "mốt 3 phần") | `date=2026-11-25`. |
