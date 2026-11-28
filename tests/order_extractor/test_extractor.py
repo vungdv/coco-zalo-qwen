@@ -374,7 +374,7 @@ def test_past_cancellation_never_reaches_the_model():
 
 def test_order_carries_the_sender_id_as_customer_id():
     e = run(Answer(True, {"qty": 1}), sender_id="123456789")
-    assert isinstance(e, OrderExtracted) and e.order.customer_id == "123456789"
+    assert isinstance(e, OrderExtracted) and e.order.customer_id == "zalo:123456789"
 
 
 def test_order_is_placed_at_the_message_time_not_the_processing_time():

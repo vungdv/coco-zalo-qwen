@@ -41,7 +41,7 @@ class Llm(Protocol):
 
 # "cancel" is not here: a cancellation is now an order line (spec v2 Z2)
 IGNORE_REASONS = ("chat", "question", "receipt", "thanks", "past", "several", "other")
-OPS = tuple(o.value for o in Op)
+OPS = (Op.ADD.value, Op.REDUCE.value, Op.SET.value, Op.CANCEL.value)  # never "delete": Zalo cannot send it (VC-14)
 
 
 def system_prompt(created: date, day: date | None = None) -> str:
@@ -116,36 +116,42 @@ class OllamaLlm:
         self.http = session or requests.Session()
 
     def classify(self, text: str, created: date, day: date | None = None) -> Answer:
-        try:
-            r = self.http.post(
-                f"{self.url}/api/chat",
-                json={
-                    "model": self.model,
-                    "stream": False,
-                    "think": False,  # thinking models (qwen3) reason at length first; others accept and ignore it
-                    "format": "json",
-                    "options": {"temperature": 0},
-                    "messages": [
-                        {"role": "system", "content": system_prompt(created, day)},
-                        {"role": "user", "content": "MESSAGE (data):\n<<<\n" + text + "\n>>>"},
-                    ],
-                },
-                timeout=self.timeout,
-            )
-        except requests.ConnectionError as e:  # also ConnectTimeout: Ollama is not there at all
-            raise LlmUnavailable(type(e).__name__) from e
-        except requests.Timeout as e:  # read timeout: this input is slow
-            raise LlmTimeout("timeout") from e
-        except requests.RequestException as e:
-            raise LlmTimeout(type(e).__name__) from e
-        if r.status_code == 404:  # {"error": "model '...' not found"}
-            raise LlmUnavailable("model missing")
-        if r.status_code >= 500:
-            raise LlmTimeout(f"ollama {r.status_code}")
-        if r.status_code != 200:
-            raise LlmInvalid(f"ollama {r.status_code}")
-        try:
-            content = r.json()["message"]["content"]
-            return parse_answer(json.loads(content))
-        except (KeyError, TypeError, ValueError) as e:
-            raise LlmInvalid("not json") from e
+        user = "MESSAGE (data):\n<<<\n" + text + "\n>>>"
+        return parse_answer(
+            chat_json(self.http, self.url, self.model, self.timeout, system_prompt(created, day), user)
+        )
+
+
+def chat_json(
+    http: requests.Session, url: str, model: str, timeout: float, system: str, user: str
+) -> object:
+    """One Ollama chat call answered as JSON. Shared by the Zalo extractor and the voice parser (spec v3 V1)."""
+    try:
+        r = http.post(
+            f"{url}/api/chat",
+            json={
+                "model": model,
+                "stream": False,
+                "think": False,  # thinking models (qwen3) reason at length first; others accept and ignore it
+                "format": "json",
+                "options": {"temperature": 0},
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            },
+            timeout=timeout,
+        )
+    except requests.ConnectionError as e:  # also ConnectTimeout: Ollama is not there at all
+        raise LlmUnavailable(type(e).__name__) from e
+    except requests.Timeout as e:  # read timeout: this input is slow
+        raise LlmTimeout("timeout") from e
+    except requests.RequestException as e:
+        raise LlmTimeout(type(e).__name__) from e
+    if r.status_code == 404:  # {"error": "model '...' not found"}
+        raise LlmUnavailable("model missing")
+    if r.status_code >= 500:
+        raise LlmTimeout(f"ollama {r.status_code}")
+    if r.status_code != 200:
+        raise LlmInvalid(f"ollama {r.status_code}")
+    try:
+        return json.loads(r.json()["message"]["content"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise LlmInvalid("not json") from e

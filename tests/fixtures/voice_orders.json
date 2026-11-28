@@ -1,0 +1,44 @@
+[
+ {
+  "customer_id": "zalo:111",
+  "customer_name": "Lê Hương",
+  "quantity": 7,
+  "delivered": false
+ },
+ {
+  "customer_id": "zalo:222",
+  "customer_name": "Hương Giang",
+  "quantity": 2,
+  "delivered": false
+ },
+ {
+  "customer_id": "zalo:333",
+  "customer_name": "Chị Mai",
+  "quantity": 3,
+  "delivered": false
+ },
+ {
+  "customer_id": "hoàng nam",
+  "customer_name": "Hoàng Nam",
+  "quantity": 1,
+  "delivered": true
+ },
+ {
+  "customer_id": "zalo:444",
+  "customer_name": "Anh Tuấn",
+  "quantity": 4,
+  "delivered": false
+ },
+ {
+  "customer_id": "zalo:555",
+  "customer_name": "Anh Minh",
+  "quantity": 5,
+  "delivered": false
+ },
+ {
+  "customer_id": "zalo:666",
+  "customer_name": "Cô Tư",
+  "quantity": 2,
+  "delivered": false
+ }
+]

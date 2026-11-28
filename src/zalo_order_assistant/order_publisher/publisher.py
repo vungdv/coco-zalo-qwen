@@ -56,7 +56,7 @@ class PublisherConfig:
 
 def build_payload(order: Order) -> dict:
     payload: dict[str, object] = {
-        "source": SOURCE,
+        "source": order.source,
         "external_id": order.key,
         "op": order.op.value,
         "customer_name": order.who,  # sent on every line: the latest name is shown, and it identifies a customer
@@ -65,11 +65,11 @@ def build_payload(order: Order) -> dict:
         # the message time, not the publish time: a backfilled or retried order keeps when it was placed
         "placed_at": order.placed_at.isoformat(timespec="seconds"),
     }
-    if order.op is not Op.CANCEL:  # the backend rejects a quantity on cancel
+    if order.op not in (Op.CANCEL, Op.DELETE):  # the backend rejects a quantity on these
         payload["quantity"] = order.qty
     if order.customer_id:
-        # the stable Zalo user id: the backend keys the customer by it, so a renamed customer keeps one order
-        payload["customer_id"] = f"{SOURCE}:{order.customer_id}"
+        # the stable customer id: the backend keys the customer by it, so a renamed customer keeps one order
+        payload["customer_id"] = order.customer_id
     return payload
 
 
@@ -92,6 +92,14 @@ def classify(key: str, status: int, error: str | None = None) -> PublishResult:
         # 404: the function is not deployed or the URL is wrong, so every message would fail the same way.
         return PublishFailed(key, FailureKind.SYSTEMIC, status, "unavailable")
     return PublishFailed(key, FailureKind.PERMANENT, status, "unexpected status")
+
+
+def _body(resp: requests.Response) -> dict | None:
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    return body if isinstance(body, dict) else None
 
 
 _ERROR_CODE = frozenset({NO_OPEN_ORDER, "idempotency_conflict"})
@@ -133,31 +141,40 @@ class SupabaseOrderPublisher:
             event = PublishFailed(order.key, FailureKind.SYSTEMIC, None, type(exc).__name__)
         self._mediator.notify(event)
 
-    def publish_now(self, order: Order) -> PublishResult:
+    def publish_now(self, order: Order, traceparent: str | None = None) -> PublishResult:
+        headers = {"x-api-key": self._cfg.api_key}
+        trace = ""
+        if traceparent:
+            headers["traceparent"] = traceparent
+            trace = f" trace_id={traceparent.split('-')[1]}"
         try:
             resp = self._http.post(
                 f"{self._cfg.supabase_url}/functions/v1/orders",
                 json=build_payload(order),
-                headers={"x-api-key": self._cfg.api_key},
+                headers=headers,
                 timeout=self._cfg.timeout_seconds,
             )
         except requests.RequestException as exc:
-            log.warning("order_publish_unreachable key=%s error_type=%s", order.key, type(exc).__name__)
+            log.warning("order_publish_unreachable key=%s error_type=%s%s", order.key, type(exc).__name__, trace)
             return PublishFailed(order.key, FailureKind.SYSTEMIC, None, type(exc).__name__)
         event = classify(order.key, resp.status_code, _problem_error(resp) if resp.status_code == 409 else None)
         op = order.op.value
         if isinstance(event, OrderPublished):
-            log.info("order_published key=%s op=%s status=%d", order.key, op, resp.status_code)
+            log.info("order_published key=%s op=%s status=%d%s", order.key, op, resp.status_code, trace)
+            event = OrderPublished(order.key, _body(resp))
         elif isinstance(event, OrderNotApplied):
-            log.warning("order_not_applied key=%s op=%s date=%s reason=%s", order.key, op, order.date, event.reason)
+            log.warning(
+                "order_not_applied key=%s op=%s date=%s reason=%s%s", order.key, op, order.date, event.reason, trace
+            )
         else:
             log.warning(
-                "order_publish_failed key=%s op=%s status=%d kind=%s reason=%s",
+                "order_publish_failed key=%s op=%s status=%d kind=%s reason=%s%s",
                 order.key,
                 op,
                 resp.status_code,
                 event.kind,
                 event.reason,
+                trace,
             )
         return event
 
