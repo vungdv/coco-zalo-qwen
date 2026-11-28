@@ -47,6 +47,12 @@ OPS = tuple(o.value for o in Op)
 def system_prompt(created: date, day: date | None = None) -> str:
     """`day` is the day the code resolver found in the message (day_words.resolve), when it names one."""
     table = "\n".join(f"- {words} -> {d.isoformat()}" for words, d in day_word_table(created))
+    past = (  # with a resolved day the rule only misleads ("ngày kia" came back "past"): the resolver judged it
+        ""
+        if day is not None
+        else "- A message about a past day (hôm qua, hôm kia, tuần trước) is NOT an order: ignore_message, "
+        'reason "past".\n'
+    )
     if day is not None:  # the model must not judge it "past": the resolver already did (T4a)
         table += (
             f"\n- This message names the day {day.isoformat()} ({WEEKDAY_NAMES[day.weekday()]}). It is today or "
@@ -66,12 +72,11 @@ Vietnamese diacritics ("ngày mai" = "ngay mai").
 
 Rules:
 - If the message names no day, leave "date" out. Never invent a date.
-- A message about a past day (hôm qua, hôm kia, tuần trước) is NOT an order: ignore_message, reason "past".
-- "kia" is a day word only directly before a quantity or an order word. "cái kia", "bên kia", "2 phần kia" have no \
-day meaning.
+{past}- "kia" is a day word only directly before a quantity or an order word ("kia 2 phần" = add 2 for that day). \
+"cái kia", "bên kia", "2 phần kia" have no day meaning.
 - Confirmations, receipts, thanks, compliments, payment notes, questions and reports about an existing order are \
 NOT orders, even when they contain a number of portions ("đã nhận 2 phần", "nhận rồi", "2 phần ngon quá", \
-"chuyển khoản rồi").
+"chuyển khoản rồi", "@Lan có cơm chưa ạ?").
 - Chit-chat between members, announcements and menus are NOT orders.
 - qty is the number of portions (phần, suất, hộp, xuất, or a bare number). If an order states no number, qty is 1.
 - If the message holds more than one order (several people, or several different days), set multipleOrders true. \
@@ -86,6 +91,7 @@ op says what the order does. Almost every order is "add"; use another op only wh
 portions) is "reduce".
 - "set": a new total, only with a word such as sửa, đổi, thành, còn, chỉ, vẫn, chốt, nhớ ("sửa lại 3 phần", \
 "vẫn 2 phần nhé", "nhớ 2 phần mai nhé"). qty is that total.
+- "À 6s nhé", "À nhầm bạn ơi 4s" correct an earlier order: "set", qty is the number written.
 - "cancel": the whole order is off, no qty ("hủy đơn", "hủy nhé", "mai không lấy nữa").
 - For "reduce" and "set", give qty only if the message states a number.
 Reply with ONLY one JSON object, either
@@ -116,6 +122,7 @@ class OllamaLlm:
                 json={
                     "model": self.model,
                     "stream": False,
+                    "think": False,  # thinking models (qwen3) reason at length first; others accept and ignore it
                     "format": "json",
                     "options": {"temperature": 0},
                     "messages": [

@@ -99,3 +99,7 @@
 {"id": 99, "text": "hủy đơn hôm qua giúp e", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "past"}}
 {"id": 100, "text": "bớt 1 phần mai, kia thêm 2", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "several dates"}}
 {"id": 101, "text": "đơn mai của e vẫn giao chứ ạ?", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}
+{"id": 102, "text": "À 6s nhé", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 6, "date": "2026-11-23"}}
+{"id": 103, "text": "À nhầm bạn ơi 4s", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": true, "op": "set", "qty": 4, "date": "2026-11-23"}}
+{"id": 104, "text": "@Quý Hương C ơi, k biết mình đã có cơm chưa ah? Em đang tính suất để phần ạ", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}
+{"id": 105, "text": "@Minh Phương tầm 10.30 có chưa bạn?", "created": "2026-11-23T09:15:00+07:00", "expect": {"order": false, "why": "question"}}
