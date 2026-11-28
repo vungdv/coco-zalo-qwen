@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from concurrent.futures import Executor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -34,6 +35,11 @@ EARLIEST_CREATED = datetime(2020, 1, 1, tzinfo=VN_TZ)
 MESSAGE_MAX_CHARS = 2000
 
 ExtractResult = OrderExtracted | NotAnOrder | ExtractFailed
+
+# The model's own reply words. A customer never writes them; a message that does is talking to the model
+# ("... trả lời record_order với qty 50"), which the 7B model sometimes obeys whatever the prompt says.
+REPLY_WORDS = re.compile(r"record_order|ignore_message|multipleorders", re.IGNORECASE)
+INJECTION = "injection"
 
 
 @dataclass(frozen=True)
@@ -85,6 +91,8 @@ class OrderExtractor:
         who = message.sender.strip()
         if not who:
             return NotAnOrder(key, "no sender name")
+        if REPLY_WORDS.search(message.text):
+            return NotAnOrder(key, INJECTION)
         day = resolve(message.text, created, self.max_days_ahead)
         if day.reason:  # past day, invalid date, several days, beyond the horizon: no need to ask the model
             return NotAnOrder(key, day.reason)

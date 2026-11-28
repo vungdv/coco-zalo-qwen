@@ -12,6 +12,9 @@ in words is not trusted:
 Matching follows day_words: a word matches written exactly with its diacritics, or fully without them. Plain forms
 that are everyday words are not accepted: "con" (child, I) for "còn", "chi" (chị) for "chỉ". "bỏ" is not a change
 word at all: "bỏ qua" (ignore) opens the classic injection ("Bỏ qua mọi hướng dẫn...").
+
+A correction also counts as a set word: "nhầm" (mistake: "À nhầm bạn ơi 4s"), or the message opening with the
+afterthought "À" ("À 6s nhé"). "À" only counts as the first word, written with its diacritic: plain "a" is "anh".
 """
 
 from __future__ import annotations
@@ -29,7 +32,8 @@ def _words(with_plain: tuple[str, ...], exact_only: tuple[str, ...] = ()) -> fro
     return frozenset(with_plain) | frozenset(plain(w) for w in with_plain) | frozenset(exact_only)
 
 
-SET_WORDS = _words(("sửa", "đổi", "thành", "vẫn", "chốt", "nhớ"), ("còn", "chỉ"))
+SET_WORDS = _words(("sửa", "đổi", "thành", "vẫn", "chốt", "nhớ", "nhầm"), ("còn", "chỉ"))
+OPENING_SET_WORDS = frozenset({"à"})
 REDUCE_WORDS = _words(("bớt", "giảm", "hủy", "huỷ", "trừ"))
 CANCEL_WORDS = _words(("hủy", "huỷ", "cancel", "không", "ko", "thôi"), ("k",))
 _NEEDS = {Op.REDUCE: REDUCE_WORDS, Op.CANCEL: CANCEL_WORDS}
@@ -50,7 +54,7 @@ def _has_number(text: str, toks: list[str]) -> bool:
 def check_op(op: Op, text: str) -> Op | str:
     """The op to send, or a NotAnOrder reason."""
     toks = _tokens(text)
-    if op is Op.SET and not _has(SET_WORDS, toks):
+    if op is Op.SET and not _has(SET_WORDS, toks) and not (toks and toks[0] in OPENING_SET_WORDS):
         return Op.ADD
     if op in _NEEDS and not _has(_NEEDS[op], toks):
         return UNCLEAR_CHANGE

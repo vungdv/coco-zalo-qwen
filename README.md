@@ -60,7 +60,7 @@ Each time something changes, the console prints a line like:
 | A pre-order ("mai lấy 2 phần", "đặt cơm", "thứ 6 cho e 1 suất") | Added to the customer's order for that day. No number means 1 portion. No day means the day the message was written. A second pre-order for the same day adds to the same order. |
 | More portions ("thêm 1 suất") | Added to the order. |
 | Fewer portions ("bớt 1 phần", "giảm 2 suất", "hủy 1 phần") | Taken off the order (never below 0). The number must be written: "bớt đi nhé" is ignored and noted. |
-| A new total ("sửa lại 3 phần", "đổi thành 2 phần", "vẫn 2 phần nhé", "chốt 2 phần") | The order becomes that total. |
+| A new total ("sửa lại 3 phần", "đổi thành 2 phần", "vẫn 2 phần nhé", "chốt 2 phần", "À nhầm 4s") | The order becomes that total. |
 | A cancellation ("hủy đơn", "mai không lấy nữa") | The order goes to 0 and shows as cancelled. |
 | A change when the customer has no open order that day (nothing ordered, or already delivered) | Nothing changes. Noted in the audit log as `not_applied`, and a WARNING `order_not_applied` is logged. |
 | The same message read again (restart, backfill) | Nothing new: the backend recognises the message key. |
@@ -73,7 +73,7 @@ Each time something changes, the console prints a line like:
 
 A change with no day word ("bớt 1 phần") applies to the day the message was written. A customer who ordered "mai 2 phần" and writes "bớt 1 phần" the same evening should say "mai bớt 1 phần"; otherwise the change is `not_applied` until the backend learns to find the next open order (spec v2, B1).
 
-The model can still be wrong on unusual wording. On the test set it was right 99% of the time, including every change message ([reports/extractor-accuracy-v2.md](reports/extractor-accuracy-v2.md)). If a customer says an order is missing, check the audit log (section 6).
+The model can still be wrong on unusual wording. On the test set of 105 messages it was right every time, including every change message ([reports/extractor-accuracy-v2.md](reports/extractor-accuracy-v2.md)). If a customer says an order is missing, check the audit log (section 6).
 
 ## 4. Configuration
 
