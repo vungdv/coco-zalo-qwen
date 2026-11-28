@@ -24,6 +24,8 @@ from zalo_order_assistant.coordinator import Coordinator
 from zalo_order_assistant.order_extractor import ExtractorConfig, OrderExtractor, create_extractor
 from zalo_order_assistant.order_publisher import PublisherConfig, SupabaseOrderPublisher, create_publisher
 from zalo_order_assistant.ports import Mediator, MessageSource
+from zalo_order_assistant.voice_commands.wiring import VoiceConfig, create_voice_worker
+from zalo_order_assistant.voice_commands.worker import VoiceWorker
 from zalo_order_assistant.zalo_reader import ReaderConfig, create_reader
 
 log = logging.getLogger("zalo_order_assistant")
@@ -70,6 +72,7 @@ class Config:
     reader: ReaderConfig
     extractor: ExtractorConfig
     publisher: PublisherConfig = field(repr=False)
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Config:
@@ -78,6 +81,7 @@ class Config:
             ReaderConfig.from_env(env),
             ExtractorConfig.from_env(env),
             PublisherConfig.from_env(env),
+            VoiceConfig.from_env(env),
         )
 
     @property
@@ -131,11 +135,16 @@ class App:
     extractor: OrderExtractor
     publisher: SupabaseOrderPublisher
     audit: SqliteAuditLog
+    voice: VoiceWorker | None = None
 
     def run(self) -> None:
         try:
+            if self.voice:
+                self.voice.start()
             self.coordinator.run()
         finally:
+            if self.voice:
+                self.voice.stop()
             self.extractor.close()
             self.publisher.close()
             self.audit.close()
@@ -161,7 +170,8 @@ def build(
     extractor = create_extractor(coordinator, config.extractor)
     publisher = create_publisher(coordinator, config.publisher)
     coordinator.attach(source, extractor, publisher)
-    return App(coordinator, source, extractor, publisher, audit)
+    voice = create_voice_worker(config.voice, config.publisher, on_status) if config.voice.enabled else None
+    return App(coordinator, source, extractor, publisher, audit, voice)
 
 
 def main() -> None:
@@ -173,12 +183,13 @@ def main() -> None:
         raise SystemExit(2) from exc
     setup_logging(config.secrets, os.environ.get("LOG_LEVEL", "INFO"))
     log.info(
-        "starting chat=%s model=%s backfill_days=%g max_attempts=%d include_own=%s",
+        "starting chat=%s model=%s backfill_days=%g max_attempts=%d include_own=%s voice=%s",
         "configured" if config.reader.zalo_chat else "the open group",
         config.extractor.ollama_model,
         config.reader.backfill_days,
         config.pipeline.max_attempts,
         config.pipeline.include_own_messages,
+        "on" if config.voice.enabled else "OFF",
     )
     app = build(config, on_status=status_printer())
 

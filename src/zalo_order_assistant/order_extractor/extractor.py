@@ -134,7 +134,7 @@ class OrderExtractor:
                 when.isoformat(),
                 message.text[:MESSAGE_MAX_CHARS],
                 sent_at,
-                customer_id=message.sender_id,
+                customer_id=f"zalo:{message.sender_id}" if message.sender_id else "",
                 op=op,
             )
         )

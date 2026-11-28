@@ -185,7 +185,7 @@ def test_config_from_env():
 def test_payload_sends_customer_id_namespaced_by_source():
     from dataclasses import replace
 
-    assert build_payload(replace(ORDER, customer_id="123456789"))["customer_id"] == "zalo:123456789"
+    assert build_payload(replace(ORDER, customer_id="zalo:123456789"))["customer_id"] == "zalo:123456789"
     assert "customer_id" not in build_payload(ORDER)
 
 

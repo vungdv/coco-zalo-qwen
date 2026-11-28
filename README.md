@@ -175,3 +175,38 @@ If step 1 shows `scope=search candidates=0`, open the search results in Chrome D
 ### Checking the publisher against the real app (open check of T3)
 
 `uv run python scripts/check_publisher.py` sends add 3, reduce 1, set 4 and cancel for a throw-away customer today, replays the first line, and sends a reduce with nothing open. It prints the total after each step (3, 2, 4, 0, then 200, then not applied). Delete the cancelled test order in the app afterwards.
+
+## Chef voice commands
+
+The chef can hold the talk button in the kitchen app and say what to change. This tool reads those commands and applies them. Design: [spec.v3.md](spec.v3.md).
+
+**Turn it on:** deploy the app's Voice Command API first (bep-phuong-bac-supabase), then set `VOICE_COMMANDS=1` in `.env` and restart. It uses the same `SUPABASE_URL`, `SUPABASE_API_KEY` and local model as the Zalo reading. Only then turn on the button in the app (`VITE_VOICE=1`).
+
+| The chef says | What happens |
+|---|---|
+| "Lê Hương, 4 suất" | Her order becomes 4 (created if she has none) |
+| "Lê Hương thêm 2" / "bớt 1" | 2 more / 1 fewer |
+| "Lê Hương, huỷ đơn" | Cancelled (stays listed) |
+| "Lê Hương, xoá đơn" | Removed from the list |
+
+The day is the one on the chef's screen. The name should be the customer's Zalo name; if two customers match, nothing changes and the app asks for the full name.
+
+**Check it works** (changes real orders, so use a test name):
+
+```bash
+SUPABASE_URL=... SUPABASE_ANON_KEY=... STAFF_EMAIL=... STAFF_PASSWORD=... \
+  uv run python scripts/check_voice.py "Kiểm Tra, 2 suất"
+# then remove it: ... "Kiểm Tra xoá đơn"
+```
+
+**Troubleshooting**
+
+| Sign | Meaning |
+|---|---|
+| The app shows "Trợ lý chưa nhận" | This tool is not running, or `VOICE_COMMANDS` is not `1` |
+| `[status] voice=EXTRACTOR_UNAVAILABLE` | Ollama is stopped or the model is missing |
+| `[status] voice=PUBLISHER_UNAUTHORIZED` | Wrong or revoked `SUPABASE_API_KEY` |
+| `[status] voice=PUBLISHER_UNAVAILABLE` | Supabase unreachable, or the function is not deployed |
+
+Logs show the command id, action and outcome, never what was said or who it was about.
+

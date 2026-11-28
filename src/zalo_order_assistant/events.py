@@ -35,6 +35,7 @@ class Op(StrEnum):
     REDUCE = "reduce"  # fewer portions by qty
     SET = "set"  # the total becomes qty
     CANCEL = "cancel"  # the whole order is off (no qty)
+    DELETE = "delete"  # the order was a mistake (no qty); only chef voice commands send it (spec v3)
 
 
 class PipelineState(StrEnum):
@@ -67,8 +68,9 @@ class Order:
     date: str  # YYYY-MM-DD
     message: str = field(repr=False)
     placed_at: datetime  # when the customer sent the message (Message.sent_at), tz-aware
-    customer_id: str = ""  # Message.sender_id; "" when unknown
+    customer_id: str = ""  # the backend's full customer id ("zalo:<uid>"); "" when unknown
     op: Op = Op.ADD
+    source: str = "zalo"  # with `key`, the backend's idempotency key
 
 
 # --- Reader -> Coordinator ------------------------------------------------------------------------------------------
@@ -112,6 +114,7 @@ class ExtractFailed:
 @dataclass(frozen=True)
 class OrderPublished:
     key: str
+    body: dict | None = field(default=None, compare=False, repr=False)  # the API response (spec v3 §5.2)
 
 
 @dataclass(frozen=True)
